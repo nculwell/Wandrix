@@ -3,26 +3,22 @@
 local dbg = require("dbg")
 local clr = require("color")
 
-local SCREEN_MODE = {800,600}
-local TILE_SIZE = {w=100,h=100}
 local TICKS_PER_SECOND = 10
+local TICK_DURATION = 1/TICKS_PER_SECOND
 local MOVES_PER_TILE = 5
-local MAP_SIZE = {w=2000,h=2000}
-local START_POS = {x=1000,y=1000}
+local START_POS = {x=0,y=0}
 
 local glo = {
   fullscreen=true,
   paused=false,
   quitting=false,
-  startTime=0,
-  nextTickTime=0,
   player = {
-    pos = {x=0,y=0}, mov = {x=0,y=0}, draw = {x=0,y=0}
+    pos = START_POS, mov = {x=0,y=0}, draw = {x=0,y=0}
   },
   moveKeys = {}
 }
 
-function dump(z)
+local function dump(z)
   print("{")
   for x in pairs(z) do
     print(x .. ": " .. tostring(z[x]))
@@ -31,11 +27,11 @@ function dump(z)
 end
 
 function love.load()
+  print()
   toggleFullscreen()
   love.window.setTitle("Wandrix")
   glo.startTime = love.timer.getTime()
   glo.nextTickTime = 0
-  dump(dbg)
   dbg.init("wandrix.log")
   glo.map = load("map")
 end
@@ -68,7 +64,7 @@ function love.update(dt)
   -- logic loop
   while glo.nextTickTime < time do
     dbg.print(string.format("TICK: %f", glo.nextTickTime))
-    glo.nextTickTime = glo.nextTickTime + (1 / TICKS_PER_SECOND)
+    glo.nextTickTime = glo.nextTickTime + TICK_DURATION
     -- Apply previous move
     p.pos.x = p.pos.x + p.mov.x
     p.pos.y = p.pos.y + p.mov.y
@@ -77,8 +73,7 @@ function love.update(dt)
     dbg.print(string.format("MOVE: %f,%f", p.mov.x, p.mov.y))
     -- TODO: Cancel move if invalid.
   end
-  -- current phase display
-  local phase = 1 - ((glo.nextTickTime - time) / (1 / TICKS_PER_SECOND))
+  local phase = 1 - ((glo.nextTickTime - time) / TICK_DURATION)
   p.draw = { x = p.pos.x + phase * p.mov.x, y = p.pos.y + phase * p.mov.y }
 end
 
@@ -112,24 +107,25 @@ function love.draw()
   love.graphics.setColor(clr.GREEN)
   rect("fill", 0, 0, screenSizeX, screenSizeY)
   love.graphics.setColor(clr.WHITE)
-  love.graphics.draw(glo.map.image, -pos.x, -pos.y)
+  love.graphics.draw(glo.map.image, centerX-pos.x, centerY-pos.y)
   -- Grid lines
-  if true then
-    love.graphics.setColor(clr.LGREEN)
-    local tilesPerScreen = { x = math.ceil(screenSizeX / tileW), y = math.ceil(screenSizeY / tileH) }
-    for gridX = 1, tilesPerScreen.x do
-      local x = gridX * tileW - (pos.x % tileW)
-      love.graphics.line(x, 0, x, screenSizeY-1)
-    end
-    for gridY = 0, tilesPerScreen.y do
-      local y = gridY * tileH - (pos.y % tileH)
-      love.graphics.line(0, y, screenSizeX-1, y)
-    end
-  end
+  --if true then
+  --  love.graphics.setColor(clr.LGREEN)
+  --  local tilesPerScreen = { x = math.ceil(screenSizeX / tileW), y = math.ceil(screenSizeY / tileH) }
+  --  for gridX = 1, tilesPerScreen.x do
+  --    local x = gridX * tileW - ((centerX-pos.x) % tileW)
+  --    love.graphics.line(x, 0, x, screenSizeY-1)
+  --  end
+  --  for gridY = 0, tilesPerScreen.y do
+  --    local y = gridY * tileH - ((centerY-pos.y) % tileH)
+  --    love.graphics.line(0, y, screenSizeX-1, y)
+  --  end
+  --end
   -- Player
   love.graphics.setColor(clr.BLUE)
   --dbg.printf("DRAW: %f,%f", pos.x, pos.y)
-  rect("fill", centerX, centerY, .6*tileW, .6*tileW)
+  local playerSize = (MOVES_PER_TILE-2)/MOVES_PER_TILE
+  rect("fill", centerX, centerY, math.floor(playerSize*tileW), math.floor(playerSize*tileW))
 end
 
 function rect(mode, x, y, w, h)
@@ -149,10 +145,8 @@ function load(filename)
   print("Computing tile size.")
   print("Image: " .. image:getWidth() .. " x " .. image:getHeight())
   print("Tiles: " .. table.getn(tiles[1]) .. " x " .. table.getn(tiles))
-  local tileW = image:getWidth() / table.getn(tiles[1])
-  local tileH = image:getHeight() / table.getn(tiles)
-  print("Tile size: " .. tileW .. " x " .. tileH)
-  local tileSize = { w = tileW, h = tileH }
+  local tileSize = tiles.tileSize
+  tiles.tileSize = nil
   print(string.format("Tile size: %d x %d", tileSize.w, tileSize.h))
   print("Loading complete.")
   return { tileset=tileset, tiles=tiles, image=image, tileSize=tileSize }
@@ -161,7 +155,6 @@ end
 local function split(str, delim)
   assert(str)
   assert(delim)
-  --print(str)
   if not str or string.len(str) == 0 then return {} end
   local pieces = {}
   local i = 1
@@ -169,17 +162,12 @@ local function split(str, delim)
   while true do
     n = n + 1
     local f, follow = string.find(str, delim, i, true)
-    --if f then print("f="..f) end
-    --if follow then print("follow="..follow) end
     if f == nil then
-      --print(i .. ",end")
       pieces[n] = string.sub(str, i)
       break
     else
-      --print(i..","..f.."="..string.sub(str,i,f-1))
       pieces[n] = string.sub(str, i, f-1)
     end
-    --print(pieces[n])
     i = follow + 1
   end
   return pieces
@@ -199,16 +187,20 @@ end
 function loadTiles(filename)
   local lines = assert(io.lines(filename .. ".tiles"))
   local tiles = {}
-  local r = 0
+  local r = -1
   for row in lines do
     r = r + 1
-    tiles[r] = {}
-    local rowFields = split(string.sub(row, 2), ",")
-    for c, col in ipairs(rowFields) do
-      tiles[r][c] = tonumber(col)
-      --print("COL " .. r .. " " .. c .. " " .. col)
+    if r == 0 then
+      local tileW, tileH = unpack(split(row, ","))
+      tiles.tileSize = {w=tileW,h=tileH}
+    else
+      tiles[r] = {}
+      local rowFields = split(string.sub(row, 2), ",")
+      for c, col in ipairs(rowFields) do
+        tiles[r][c] = tonumber(col)
+        --print("COL " .. r .. " " .. c .. " " .. col)
+      end
     end
-    --print("" .. table.getn(tiles[r]))
   end
   return tiles
 end

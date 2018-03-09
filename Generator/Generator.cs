@@ -27,7 +27,7 @@ namespace Generator
             var ts = Tile.Tileset();
             var tiles = GenerateTiles(ts.Count);
             var image = GenerateImage(ts, tiles);
-            Map m = new Map() { Tileset = ts, Tiles = tiles, Image = image };
+            Map m = new Map(_tileSize) { Tileset = ts, Tiles = tiles, Image = image };
             return m;
         }
 

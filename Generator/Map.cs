@@ -13,6 +13,10 @@ namespace Generator
         public List<Tile> Tileset;
         public int[,] Tiles;
         public Image<Rgba32> Image;
+        private Size _tileSize;
+
+        public Map(Size tileSize) { _tileSize = tileSize; }
+
         public void Save(string filename)
         {
             using (var f = new StreamWriter(filename + ".tileset"))
@@ -20,6 +24,7 @@ namespace Generator
                     f.WriteLine(t.ToFileRepr());
             using (var f = new StreamWriter(filename + ".tiles"))
             {
+                f.WriteLine($"{_tileSize.W},{_tileSize.H}");
                 for (int y = 0; y < Tiles.GetLength(1); ++y)
                 {
                     for (int x = 0; x < Tiles.GetLength(0); ++x)

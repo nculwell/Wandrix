@@ -5,8 +5,8 @@ namespace Generator
 {
     class Program
     {
-        static Size MapSize = new Size(10, 10);
-        static Size TileSize = new Size(100, 100);
+        static Size MapSize = new Size(16, 16);
+        static Size TileSize = new Size(64, 64);
         static void Main(string[] args)
         {
             string dir = (args.Length > 0 ? args[0] : ".");

@@ -1,5 +1,5 @@
 function love.conf(t)
-  t.window.vsync = false
+  t.window.vsync = true
   t.console = true
   t.modules.audio = true
   t.modules.event = true
