@@ -12,7 +12,7 @@ namespace Generator
     {
         public List<Tile> Tileset;
         public int[,] Tiles;
-        public Rgb[,] Image;
+        public Image<Rgba32> Image;
         public void Save(string filename)
         {
             using (var fs = new FileStream(filename + ".dat", FileMode.Create))
@@ -20,30 +20,22 @@ namespace Generator
             {
                 int[] header = new[] {
                     Tiles.GetLength(0), Tiles.GetLength(1),
-                    //Image.GetLength(0), Image.GetLength(1),
                 };
                 foreach (int h in header)
                     f.Write(IPAddress.HostToNetworkOrder(h));
                 foreach (short tileId in Tiles)
                     f.Write(IPAddress.HostToNetworkOrder(tileId));
-                //foreach (Rgb pixel in Image)
-                //{
-                //    f.Write(pixel.To8Bit());
-                //    //f.Write(pixel.R);
-                //    //f.Write(pixel.G);
-                //    //f.Write(pixel.B);
-                //}
             }
-            var img = new Image<Rgba32>(Image.GetLength(0), Image.GetLength(1));
-            for (int y = 0; y < Image.GetLength(1); ++y)
-            {
-                for (int x = 0; x < Image.GetLength(0); ++x)
-                {
-                    img[x, y] = Image[x, y].ToRgba32();
-                }
-            }
-            using (var fs = new FileStream(filename + ".png", FileMode.OpenOrCreate))
-                img.SaveAsPng(fs);
+            using (var fs = new FileStream(filename + ".png", FileMode.Create))
+                Image.SaveAsPng(fs);
+        }
+        public static Image<Rgba32> ConvertImage(Rgb[,] pixels)
+        {
+            var img = new Image<Rgba32>(pixels.GetLength(0), pixels.GetLength(1));
+            for (int y = 0; y < pixels.GetLength(1); ++y)
+                for (int x = 0; x < pixels.GetLength(0); ++x)
+                    img[x, y] = pixels[x, y].ToRgba32();
+            return img;
         }
     }
 

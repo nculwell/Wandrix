@@ -26,7 +26,7 @@ namespace Generator
             var ts = Tile.Tileset();
             var tiles = GenerateTiles(ts.Count);
             var image = GenerateImage(ts, tiles);
-            Map m = new Map() { Tileset = ts, Tiles = tiles, Image = image };
+            Map m = new Map() { Tileset = ts, Tiles = tiles, Image = Map.ConvertImage(image) };
             return m;
         }
 
@@ -80,46 +80,3 @@ namespace Generator
 
     }
 }
-
-/*
-local function _image(map, tileSize)
-  local N_POINTS = 5
-  local MAX_RADIUS = math.min(tileSize.w, tileSize.h) / 3
-  local tiles = map.tiles
-  local ts = map.tileset
-  local img = love.image.newImageData(table.getn(tiles[1]) * tileSize.w, table.getn(tiles) * tileSize.h)
-  for y = 1, table.getn(tiles) do
-    for x = 1, table.getn(tiles[1]) do
-      local colors = concatTable({}, map:tileAt(x, y).palette)
-      for p = 1, N_POINTS do
-        local radius = math.random() * MAX_RADIUS
-        local angle = math.random() * 2 * math.pi
-        local offsetX = radius * math.cos(angle)
-        local offsetY = radius * math.sin(angle)
-        local pointTile = map:tileAt(x + offsetX, y + offsetY)
-        if pointTile then
-          colors = concatTable(colors, pointTile.palette)
-        end
-      end
-      local colorIndex = math.random(table.getn(colors))
-      local pixel = colors[colorIndex]
-      img:setPixel(x-1, y-1, unpack(pixel))
-    end
-  end
-  return {
-    tiles = tiles,
-    tileset = tileset,
-    image = love.graphics.newImage(img)
-  }
-end
-
-function generate.newMap(mapSize, tileSize)
-  local tileset = _tileset()
-  local map = _tiles(mapSize, tileset)
-  local map = _image(map, tileSize)
-  return map
-end
-
-return generate
-*/
-
