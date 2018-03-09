@@ -8,7 +8,7 @@ function dbg.init(logFilename)
     filename = logFilename
   end
   local file = io.open(filename, "w")
-  file:write("STARTING")
+  file:write("STARTING\n")
   file:close()
 end
 

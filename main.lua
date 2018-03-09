@@ -55,7 +55,9 @@ end
 
 function toggleFullscreen()
   glo.fullscreen = not glo.fullscreen
-  love.window.setMode(SCREEN_MODE[1], SCREEN_MODE[2], { fullscreen = glo.fullscreen })
+  local screenW, screenH, flags = love.window.getMode()
+  flags.fullscreen = glo.fullscreen
+  love.window.setMode(screenW, screenH, flags)
 end
 
 function love.update(dt)
@@ -206,7 +208,7 @@ function loadTiles(filename)
       tiles[r][c] = tonumber(col)
       --print("COL " .. r .. " " .. c .. " " .. col)
     end
-    print("" .. table.getn(tiles[r]))
+    --print("" .. table.getn(tiles[r]))
   end
   return tiles
 end
