@@ -15,19 +15,20 @@ namespace Generator
         public Image<Rgba32> Image;
         public void Save(string filename)
         {
-            using (var f = new StreamWriter(filename + ".ts"))
+            using (var f = new StreamWriter(filename + ".tileset"))
                 foreach (var t in Tileset)
                     f.WriteLine(t.ToFileRepr());
-            using (var fs = new FileStream(filename + ".dat", FileMode.Create))
-            using (var f = new BinaryWriter(fs))
+            using (var f = new StreamWriter(filename + ".tiles"))
             {
-                int[] header = new[] {
-                    Tiles.GetLength(0), Tiles.GetLength(1),
-                };
-                foreach (int h in header)
-                    f.Write(IPAddress.HostToNetworkOrder(h));
-                foreach (short tileId in Tiles)
-                    f.Write(IPAddress.HostToNetworkOrder(tileId));
+                for (int y = 0; y < Tiles.GetLength(1); ++y)
+                {
+                    for (int x = 0; x < Tiles.GetLength(0); ++x)
+                    {
+                        f.Write(",");
+                        f.Write(Tiles[x, y]);
+                    }
+                    f.WriteLine();
+                }
             }
             using (var fs = new FileStream(filename + ".png", FileMode.Create))
                 Image.SaveAsPng(fs);
@@ -71,6 +72,7 @@ namespace Generator
                 Name, Sound,
                 String.Join(",", GetFlagsList()),
             };
+            pieces = pieces.Select(s => s ?? "").ToArray();
             return String.Join(":", pieces);
         }
         public static List<Tile> Tileset()
