@@ -1,6 +1,5 @@
 -- vim: nu et ts=2 sts=2 sw=2
 
-local generate = require("generate")
 local dbg = require("dbg")
 
 local SCREEN_MODE = {800,600}
@@ -37,9 +36,8 @@ function love.load()
   glo.startTime = love.timer.getTime()
   glo.nextTickTime = 0
   dump(dbg)
-  dump(generate)
   dbg.init("wandrix.log")
-  glo.map = generate.newMap(MAP_SIZE, TILE_SIZE)
+  glo.map = load("map")
 end
 
 function love.keypressed(key)
@@ -133,50 +131,57 @@ function rect(mode, x, y, w, h)
 end
 
 function load(filename)
-  local f = io.open(filename, "rb")
+  local tileset = loadTileset(filename)
+  local tiles = loadTiles(filename)
+  local image = love.graphics.newImage(filename + ".png")
+  return { tileset=tileset, tiles=tiles, image=image }
+end
+
+local function split(str, delim)
+  if not str or string.len(str) == 0 then return {} end
+  local pieces = {}
+  local i = 1
+  while true do
+    local f = string.find(str, delim, i, true)
+    if f == nil then
+      pieces[#pieces+1] = string.sub(str, i)
+      break
+    else
+      pieces[#pieces+1] = string.sub(str, i, f-i)
+    end
+  end
+  return pieces
+end
+
+function loadTileset(filename)
+  local f = io.open(filename + ".ts", "rt")
+  local tileset = {}
+  for ln in f:lines() do
+    local pieces = split(ln, ":")
+    local name, sound, flags = unpack(pieces)
+    tileset[#tileset+1] = { name=name, sound=sound, flags=split(flags, ",") }
+  end
+  return tileset
+end
+
+function loadTiles(filename)
+  local f = io.open(filename + ".dat", "rb")
   local buffer = f:read("*all")
   local headers, offset = readInts(buffer, 0, 4)
   local tileDimensions  = { w=headers[1], h=headers[2] }
-  local pixelDimensions = { w=headers[3], h=headers[4] }
   local tiles = {}
-  for y = 1 to tileDimensions.h do
+  for y = 1, tileDimensions.h do
     tiles[y], offset = readInts(buffer, offset, tileDimensions.w)
   end
-  local img = love.image.new
-  for y = 1 to pixelDimensions.h do
-    pixels[y] = {}
-    for x = 1 to pixelDimensions.w do
-      local pixel = buffer[offset]
-      offset = offset + 1
-      pixels[y][x] = convert8BitColor(pixel)
-    end
-  end
-  return { tiles=tiles, pixels=pixel }
+  return tiles
 end
 
-function convert8BitColor(c)
-  local r = (pixel & (32|16)) >> 4
-  local b = (pixel & (8|4)) >> 2
-  local g = (pixel & (2|1))
-  local color = {}
-  for i = 1, 3 do
-    x = {r,g,b}[i]
-    local y
-    if x == 3 then y = 255
-    elseif x == 2 then y = 127
-    elseif x == 1 then y = 63
-    else y = 0
-    end
-    color[i] = y
-  end
-  return color
-end
-
-function readInts(buffer, offset, count)
+function readInts(buffer, offset, count, intWidthBytes)
+  if intWidthBytes == nil then intWidthBytes = 4 end
   local ints = {}
   for i = 1, count do
     local n = 0
-    for byte = 1, 4 do
+    for byte = 1, intWidthBytes do
       n = n | (buffer[offset] << (4-byte))
       offset = offset + 1
     end

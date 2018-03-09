@@ -1,4 +1,5 @@
-﻿using System;
+﻿using SixLabors.ImageSharp;
+using System;
 using System.Collections.Generic;
 using System.Text;
 
@@ -26,7 +27,7 @@ namespace Generator
             var ts = Tile.Tileset();
             var tiles = GenerateTiles(ts.Count);
             var image = GenerateImage(ts, tiles);
-            Map m = new Map() { Tileset = ts, Tiles = tiles, Image = Map.ConvertImage(image) };
+            Map m = new Map() { Tileset = ts, Tiles = tiles, Image = image };
             return m;
         }
 
@@ -45,17 +46,17 @@ namespace Generator
             return tiles;
         }
 
-        private Rgb[,] GenerateImage(List<Tile> ts, int[,] tiles)
+        private Image<Rgba32> GenerateImage(List<Tile> ts, int[,] tiles)
         {
             var mapBox = new Box(tiles);
             int MaxRadius = Math.Min(_tileSize.W, _tileSize.H) / 3;
             var imageSize = _mapSize * _tileSize;
-            var image = new Rgb[imageSize.W, imageSize.H];
-            for (int y = 0; y < _mapSize.H; ++y)
+            var image = new Image<Rgba32>(imageSize.H, imageSize.H);
+            for (int y = 0; y < imageSize.H; ++y)
             {
-                for (int x = 0; x < _mapSize.W; ++x)
+                for (int x = 0; x < imageSize.W; ++x)
                 {
-                    var colors = new List<Rgb>(ts[tiles[x, y]].Colors);
+                    var colors = new List<Rgb>(ts[tiles[x / _tileSize.W, y / _tileSize.H]].Colors);
                     for (int p = 0; p < NPoints; ++p)
                     {
                         double radius = r.NextDouble() * MaxRadius;
@@ -72,7 +73,7 @@ namespace Generator
                     }
                     int colorIndex = r.Next(colors.Count);
                     Rgb pixel = colors[colorIndex];
-                    image[x, y] = pixel;
+                    image[x, y] = pixel.ToRgba32();
                 }
             }
             return image;

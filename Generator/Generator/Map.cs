@@ -15,6 +15,9 @@ namespace Generator
         public Image<Rgba32> Image;
         public void Save(string filename)
         {
+            using (var f = new StreamWriter(filename + ".ts"))
+                foreach (var t in Tileset)
+                    f.WriteLine(t.ToFileRepr());
             using (var fs = new FileStream(filename + ".dat", FileMode.Create))
             using (var f = new BinaryWriter(fs))
             {
@@ -53,6 +56,23 @@ namespace Generator
         public readonly TileFlags Flags;
         public readonly Rgb[] Colors;
         public Tile(string name, TileFlags flags, Rgb[] colors) { Name = name; Flags = flags; Colors = colors; }
+        string[] GetFlagsList()
+        {
+            var flags = (TileFlags[])Enum.GetValues(typeof(TileFlags));
+            return flags
+                .Where(f => f != TileFlags.None && Flags.HasFlag(f))
+                .Select(f => f.ToString())
+                .ToArray();
+        }
+        public string ToFileRepr()
+        {
+            var pieces = new string[]
+            {
+                Name, Sound,
+                String.Join(",", GetFlagsList()),
+            };
+            return String.Join(":", pieces);
+        }
         public static List<Tile> Tileset()
         {
             return new List<Tile>()
