@@ -5,6 +5,7 @@
 #include <SDL_image.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <assert.h>
 
 const char* WINDOW_NAME = "Wandrix";
 const int SCREEN_W = 800;
@@ -16,6 +17,16 @@ const Uint32 RENDER_FRAMES_PER_SEC = 32; // rate cap
 
 struct Coords { int x, y; };
 struct Size { int w, h; };
+struct CharBase {
+  const char* name; struct Coords pos, mov; int hpCur, hpMax;
+  const char* imgFilename; SDL_Surface* img; SDL_Texture* tex;
+};
+struct Player {
+  struct CharBase c;
+};
+struct Npc {
+  struct CharBase c;
+};
 
 SDL_Window* window;
 SDL_Renderer* renderer;
@@ -25,8 +36,11 @@ struct Coords center;
 struct Size maxTextureSize;
 struct Size mapImageSize;
 int quitting = 0;
-struct Coords playerPos;
-struct Coords playerMove;
+struct Player player = {
+  { "Player", { 0, 0 }, { 0, 0 }, 0, 0,
+  "ckclose.png", NULL, NULL }
+};
+struct Npc npcs[128];
 
 void atExitHandler()
 {
@@ -81,43 +95,77 @@ int init()
   return 1;
 }
 
-SDL_Surface* loadImage(const char* path)
+int loadImage(const char* path, struct Size* size, SDL_Surface** surface, SDL_Texture** texture)
 {
+  assert(path);
+  assert(surface);
   SDL_Surface* loadedSurface = IMG_Load(path);
   if (!loadedSurface)
   {
     fprintf(stderr, "Unable to load image '%s': %s\n", path, IMG_GetError());
-    return NULL;
+    return 0;
   }
-  SDL_Surface* optimizedSurface = SDL_ConvertSurface(loadedSurface, screen->format, 0);
-  if (!optimizedSurface)
+  *surface = SDL_ConvertSurface(loadedSurface, screen->format, 0);
+  if (!*surface)
   {
     fprintf(stderr, "Unable to optimize image '%s': %s\n", path, SDL_GetError());
+    goto loadError;
+  }
+  if (size != NULL && (loadedSurface->w != size->w || loadedSurface->h != size->h))
+  {
+    *surface = SDL_CreateRGBSurfaceWithFormat(
+        0, size->w, size->h, screen->format->BitsPerPixel, screen->format->format);
+    if (!*surface)
+    {
+      fprintf(stderr, "Unable to create surface '%s': %s\n", path, SDL_GetError());
+      goto loadError;
+    }
+    if (!SDL_BlitScaled(loadedSurface, NULL, *surface, NULL))
+    {
+      fprintf(stderr, "Unable to scale '%s': %s\n", path, SDL_GetError());
+      goto loadError;
+    }
   }
   SDL_FreeSurface(loadedSurface);
-  return optimizedSurface;
+  loadedSurface = NULL;
+  if (texture)
+  {
+    *texture = SDL_CreateTextureFromSurface(renderer, *surface);
+    if (!*texture)
+    {
+      fprintf(stderr, "Unable to create texture for image '%s': %s\n", path, SDL_GetError());
+      goto loadError;
+    }
+  }
+  return 1;
+loadError:
+  if (loadedSurface) SDL_FreeSurface(loadedSurface);
+  if (*surface) SDL_FreeSurface(*surface);
+  return 0;
 }
 
-SDL_Texture* loadImageAsTexture(const char* path)
+/* const char* name; int x, y; int hpCur, hpMax;
+   const char* imgFilename; SDL_Surface* img; SDL_Texture* tex; */
+
+int loadCharImage(struct CharBase* c)
 {
-  SDL_Surface* surface = loadImage(path);
-  if (!surface) return NULL;
-  SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
-  if (!texture)
-  {
-    fprintf(stderr, "Unable to create texture for image '%s': %s\n", path, SDL_GetError());
-  }
-  SDL_FreeSurface(surface);
-  return texture;
+  struct Size s = { 64, 64 };
+  return loadImage(c->imgFilename, &s, &c->img, &c->tex);
 }
 
 int loadAssets()
 {
-  map = loadImageAsTexture("map.png");
-  if (!map) return 0;
-  Uint32 format;
-  int access;
-  SDL_QueryTexture(map, &format, &access, &mapImageSize.w, &mapImageSize.h);
+  SDL_Surface* mapSurface;
+  if (!loadImage("map.png", NULL, &mapSurface, &map))
+    return 0;
+  mapImageSize.w = mapSurface->w;
+  mapImageSize.h = mapSurface->h;
+  SDL_FreeSurface(mapSurface);
+  if (!loadCharImage(&player.c))
+  {
+    fprintf(stderr, "Unable to load player image.\n");
+    return 0;
+  }
   return 1;
 }
 
@@ -153,17 +201,17 @@ function scanMoveKeys()
 end
 */
 
-int updateLogic()
+void updateLogic()
 {
   // Apply previous move.
-  playerPos.x += playerMove.x * 8;
-  playerPos.y += playerMove.y * 8;
+  player.c.pos.x += player.c.mov.x * 8;
+  player.c.pos.y += player.c.mov.y * 8;
   // Get next move. (We need it now to interpolate.)
-  playerMove = scanMoveKeys();
+  player.c.mov = scanMoveKeys();
   // TODO: Cancel move if invalid.
 }
 
-int updateDisplay(Uint32 phase)
+void updateDisplay(Uint32 phase)
 {
   // TODO: Interpolate object positions.
 }
@@ -182,12 +230,12 @@ int drawTexture(SDL_Rect* screenRect, SDL_Texture* texture, SDL_Rect* textureRec
   return intersects;
 }
 
-int draw()
+void draw()
 {
   SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0xFF);
   SDL_RenderClear(renderer);
   SDL_Rect screenRect = {
-    playerPos.x - center.x, playerPos.y - center.y,
+    player.c.pos.x - center.x, player.c.pos.y - center.y,
     screen->w, screen->h };
   SDL_Rect wholeMapRect = { 0, 0, mapImageSize.w, mapImageSize.h };
   drawTexture(&screenRect, map, &wholeMapRect);
@@ -246,6 +294,7 @@ int mainLoop()
       draw();
     }
   }
+  return 1;
 }
 
 int main(int argc, char** argv)

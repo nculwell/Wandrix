@@ -1,1 +1,1 @@
-gcc -std=c11 $(pkg-config --cflags sdl2 SDL2_image) -o wand wandrix.c $(pkg-config --libs sdl2 SDL2_image)
+gcc -std=c11 -Wall -Werror $(pkg-config --cflags sdl2 SDL2_image) -o wand wandrix.c $(pkg-config --libs sdl2 SDL2_image)
