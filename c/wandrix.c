@@ -39,7 +39,8 @@ struct Size maxTextureSize;
 struct Size mapImageSize;
 int quitting = 0;
 struct Player player = {
-  { .name = "Player", .img = { .path = "ckclose.png" }, }
+  { .name = "Player", .img = { .path = "ckclose.png" },
+    .pos = {0,0}, }
 };
 struct Npc npcs[128];
 
@@ -195,17 +196,32 @@ void updateDisplay(Uint32 phase)
   // TODO: Interpolate object positions.
 }
 
+const char* rectToString(SDL_Rect* r, char* buf) {
+  sprintf(buf, "(x=%d,y=%d,w=%d,h=%d)", r->x, r->y, r->w, r->h);
+  return buf;
+}
+
 int drawTexture(SDL_Rect* screenRect, SDL_Texture* texture, SDL_Rect* textureRect)
 {
+  char b1[64], b2[64];
   SDL_Rect intersectRect;
   int intersects =
     (SDL_TRUE == SDL_IntersectRect(screenRect, textureRect, &intersectRect));
+  printf("INTERSECT %s, %s ", rectToString(screenRect, b1), rectToString(textureRect, b2));
   if (intersects) {
+    SDL_Rect sourceRect = {
+      intersectRect.x - textureRect->x,
+      intersectRect.y - textureRect->y,
+      intersectRect.w, intersectRect.h };
     SDL_Rect screenDestRect = {
-      intersectRect.x - screenRect->x, intersectRect.y - screenRect->y,
+      intersectRect.x - screenRect->x,
+      intersectRect.y - screenRect->y,
       intersectRect.w, intersectRect.h };
     printf("DRAW: (%d,%d)/(%d,%d)\n", screenDestRect.x, screenDestRect.y, screenDestRect.w, screenDestRect.h);
-    SDL_RenderCopy(renderer, texture, &intersectRect, &screenDestRect);
+    SDL_RenderCopy(renderer, texture, &sourceRect, &screenDestRect);
+  }
+  else {
+    printf("SKIPPED\n");
   }
   return intersects;
 }
@@ -219,9 +235,9 @@ void drawMap(SDL_Rect* screenRect)
 void drawChar(SDL_Rect* screenRect, struct CharBase* c)
 {
   SDL_Rect charRect = {
-    center.x + c->pos.x - player.c.pos.x, center.y + c->pos.y - player.c.pos.x,
+    c->pos.x, c->pos.y,
     c->img.sfc->w, c->img.sfc->h };
-  printf("CHAR: (%d,%d)/(%d,%d)\n", charRect.x, charRect.y, charRect.w, charRect.h);
+  printf("CHAR: (%d,%d)/(%d,%d) ", charRect.x, charRect.y, charRect.w, charRect.h);
   drawTexture(screenRect, c->img.tex, &charRect);
 }
 
