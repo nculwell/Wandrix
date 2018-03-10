@@ -4,9 +4,12 @@ local dbg = require("dbg")
 local clr = require("color")
 
 local TICKS_PER_SECOND = 10
-local TICK_DURATION = 1/TICKS_PER_SECOND
+local SECS_PER_TICK = 1/TICKS_PER_SECOND
 local MOVES_PER_TILE = 5
 local START_POS = {x=0,y=0}
+local VSYNC = true
+local FULLSCREENTYPE = "desktop"
+-- local FULLSCREENTYPE = "exclusive"
 
 local glo = {
   fullscreen=true,
@@ -52,8 +55,11 @@ end
 function toggleFullscreen()
   glo.fullscreen = not glo.fullscreen
   local screenW, screenH, flags = love.window.getMode()
-  flags.fullscreen = glo.fullscreen
-  love.window.setMode(screenW, screenH, flags)
+  local newFlags = {
+    fullscreen = glo.fullscreen, fullscreentype = FULLSCREENTYPE, vsync = VSYNC, display = flags.display, }
+  dump(newFlags)
+  print(screenW.."x"..screenH)
+  love.window.setMode(screenW, screenH, newFlags)
 end
 
 function love.update(dt)
@@ -64,7 +70,7 @@ function love.update(dt)
   -- logic loop
   while glo.nextTickTime < time do
     dbg.print(string.format("TICK: %f", glo.nextTickTime))
-    glo.nextTickTime = glo.nextTickTime + TICK_DURATION
+    glo.nextTickTime = glo.nextTickTime + SECS_PER_TICK
     -- Apply previous move
     p.pos.x = p.pos.x + p.mov.x
     p.pos.y = p.pos.y + p.mov.y
@@ -73,7 +79,7 @@ function love.update(dt)
     dbg.print(string.format("MOVE: %f,%f", p.mov.x, p.mov.y))
     -- TODO: Cancel move if invalid.
   end
-  local phase = 1 - ((glo.nextTickTime - time) / TICK_DURATION)
+  local phase = 1 - ((glo.nextTickTime - time) / SECS_PER_TICK)
   p.draw = { x = p.pos.x + phase * p.mov.x, y = p.pos.y + phase * p.mov.y }
 end
 
