@@ -17,9 +17,11 @@ const Uint32 RENDER_FRAMES_PER_SEC = 32; // rate cap
 
 struct Coords { int x, y; };
 struct Size { int w, h; };
+struct Image { 
+  const char* path; SDL_Surface* sfc; SDL_Texture* tex;
+};
 struct CharBase {
-  const char* name; struct Coords pos, mov; int hpCur, hpMax;
-  const char* imgFilename; SDL_Surface* img; SDL_Texture* tex;
+  const char* name; struct Image img; struct Coords pos, mov; int hpCur, hpMax;
 };
 struct Player {
   struct CharBase c;
@@ -31,14 +33,13 @@ struct Npc {
 SDL_Window* window;
 SDL_Renderer* renderer;
 SDL_Surface* screen;
-SDL_Texture* map;
+struct Image map = { .path = "map.png" };
 struct Coords center;
 struct Size maxTextureSize;
 struct Size mapImageSize;
 int quitting = 0;
 struct Player player = {
-  { "Player", { 0, 0 }, { 0, 0 }, 0, 0,
-  "ckclose.png", NULL, NULL }
+  { .name = "Player", .img = { .path = "ckclose.png" }, }
 };
 struct Npc npcs[128];
 
@@ -95,30 +96,29 @@ int init()
   return 1;
 }
 
-int loadImage(const char* path, SDL_Surface** surface, SDL_Texture** texture)
+int loadImage(struct Image* img, int createTexture)
 {
-  assert(path);
-  assert(surface);
-  SDL_Surface* loadedSurface = IMG_Load(path);
+  assert(img);
+  assert(img->path);
+  SDL_Surface* loadedSurface = IMG_Load(img->path);
   if (!loadedSurface)
   {
-    fprintf(stderr, "Unable to load image '%s': %s\n", path, IMG_GetError());
+    fprintf(stderr, "Unable to load image '%s': %s\n", img->path, IMG_GetError());
     return 0;
   }
-  *surface = SDL_ConvertSurface(loadedSurface, screen->format, 0);
+  img->sfc = SDL_ConvertSurface(loadedSurface, screen->format, 0);
   SDL_FreeSurface(loadedSurface);
-  if (!*surface)
+  if (!img->sfc)
   {
-    fprintf(stderr, "Unable to optimize image '%s': %s\n", path, SDL_GetError());
+    fprintf(stderr, "Unable to optimize image '%s': %s\n", img->path, SDL_GetError());
     return 0;
   }
-  if (texture)
+  if (createTexture)
   {
-    *texture = SDL_CreateTextureFromSurface(renderer, *surface);
-    if (!*texture)
+    img->tex = SDL_CreateTextureFromSurface(renderer, img->sfc);
+    if (!img->tex)
     {
-      fprintf(stderr, "Unable to create texture for image '%s': %s\n", path, SDL_GetError());
-      SDL_FreeSurface(*surface);
+      fprintf(stderr, "Unable to create texture for image '%s': %s\n", img->path, SDL_GetError());
       return 0;
     }
   }
@@ -130,17 +130,16 @@ int loadImage(const char* path, SDL_Surface** surface, SDL_Texture** texture)
 
 int loadCharImage(struct CharBase* c)
 {
-  return loadImage(c->imgFilename, &c->img, &c->tex);
+  return loadImage(&c->img, 1);
 }
 
 int loadAssets()
 {
-  SDL_Surface* mapSurface;
-  if (!loadImage("map.png", &mapSurface, &map))
+  if (!loadImage(&map, 1))
     return 0;
-  mapImageSize.w = mapSurface->w;
-  mapImageSize.h = mapSurface->h;
-  SDL_FreeSurface(mapSurface);
+  mapImageSize.w = map.sfc->w;
+  mapImageSize.h = map.sfc->h;
+  SDL_FreeSurface(map.sfc);
   if (!loadCharImage(&player.c))
   {
     fprintf(stderr, "Unable to load player image.\n");
@@ -205,9 +204,34 @@ int drawTexture(SDL_Rect* screenRect, SDL_Texture* texture, SDL_Rect* textureRec
     SDL_Rect screenDestRect = {
       intersectRect.x - screenRect->x, intersectRect.y - screenRect->y,
       intersectRect.w, intersectRect.h };
+    printf("DRAW: (%d,%d)/(%d,%d)\n", screenDestRect.x, screenDestRect.y, screenDestRect.w, screenDestRect.h);
     SDL_RenderCopy(renderer, texture, &intersectRect, &screenDestRect);
   }
   return intersects;
+}
+
+void drawMap(SDL_Rect* screenRect)
+{
+  SDL_Rect wholeMapRect = { 0, 0, mapImageSize.w, mapImageSize.h };
+  drawTexture(screenRect, map.tex, &wholeMapRect);
+}
+
+void drawChar(SDL_Rect* screenRect, struct CharBase* c)
+{
+  SDL_Rect charRect = {
+    center.x + c->pos.x - player.c.pos.x, center.y + c->pos.y - player.c.pos.x,
+    c->img.sfc->w, c->img.sfc->h };
+  printf("CHAR: (%d,%d)/(%d,%d)\n", charRect.x, charRect.y, charRect.w, charRect.h);
+  drawTexture(screenRect, c->img.tex, &charRect);
+}
+
+void drawPlayer(SDL_Rect* screenRect)
+{
+  drawChar(screenRect, &player.c);
+}
+
+void drawNpcs(SDL_Rect* screenRect)
+{
 }
 
 void draw()
@@ -217,8 +241,9 @@ void draw()
   SDL_Rect screenRect = {
     player.c.pos.x - center.x, player.c.pos.y - center.y,
     screen->w, screen->h };
-  SDL_Rect wholeMapRect = { 0, 0, mapImageSize.w, mapImageSize.h };
-  drawTexture(&screenRect, map, &wholeMapRect);
+  drawMap(&screenRect);
+  drawPlayer(&screenRect);
+  drawNpcs(&screenRect);
   SDL_RenderPresent(renderer);
 }
 
