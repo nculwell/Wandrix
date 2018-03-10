@@ -34,11 +34,19 @@ struct Size Size(int w, int h)
 SDL_Window* window;
 SDL_Renderer* renderer;
 SDL_Surface* screen;
-SDL_Surface* map;
+SDL_Texture* map;
 struct Size maxTextureSize;
 int quitting = 0;
 struct Coords playerPos;
 struct Coords playerMove;
+
+void atExitHandler()
+{
+  //SDL_DestroyTexture(bitmapTex);
+  SDL_DestroyRenderer(renderer);
+  SDL_DestroyWindow(window);
+  SDL_Quit();
+}
 
 int init()
 {
@@ -69,24 +77,17 @@ int init()
     return 0;
   }
   SDL_RendererInfo rendererInfo;
-  if (!SDL_RendererInfo(renderer, &rendererInfo))
+  if (0 > SDL_GetRendererInfo(renderer, &rendererInfo))
   {
     fprintf(stderr, "Get renderer info failed: %s\n", SDL_GetError());
     return 0;
   }
   maxTextureSize.w = rendererInfo.max_texture_width;
   maxTextureSize.h = rendererInfo.max_texture_height;
+  printf("Max texture size: %dx%d\n", maxTextureSize.w, maxTextureSize.h);
   screen = SDL_GetWindowSurface(window);
   atexit(atExitHandler);
   return 1;
-}
-
-void atExitHandler()
-{
-  //SDL_DestroyTexture(bitmapTex);
-  SDL_DestroyRenderer(renderer);
-  SDL_DestroyWindow(window);
-  SDL_Quit();
 }
 
 SDL_Surface* loadImage(const char* path)
@@ -106,9 +107,22 @@ SDL_Surface* loadImage(const char* path)
   return optimizedSurface;
 }
 
+SDL_Texture* loadImageAsTexture(const char* path)
+{
+  SDL_Surface* surface = loadImage(path);
+  if (!surface) return NULL;
+  SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
+  if (!texture)
+  {
+    fprintf(stderr, "Unable to create texture for image '%s': %s\n", path, SDL_GetError());
+  }
+  SDL_FreeSurface(surface);
+  return texture;
+}
+
 int loadAssets()
 {
-  map = loadImage("map.png");
+  map = loadImageAsTexture("map.png");
   if (!map) return 0;
   return 1;
 }
@@ -163,7 +177,7 @@ int updateDisplay(Uint32 phase)
 int draw()
 {
   SDL_RenderClear(renderer);
-  SDL_RenderCopy(renderer, bitmapTex, NULL, NULL);
+  SDL_RenderCopy(renderer, map, NULL, NULL);
   SDL_RenderPresent(renderer);
 }
 
@@ -180,8 +194,9 @@ void pollEvents()
 int mainLoop()
 {
   Uint32 startTime = SDL_GetTicks();
-  Uint32 nextLogicFrameTime = 0;
+  Uint32 nextLogicFrameTime = 0, nextRenderFrame = 0;
   Uint32 logicFrameTimeMs = 1000 / LOGIC_FRAMES_PER_SEC;
+  Uint32 renderFrameTimeMs = 1000 / RENDER_FRAMES_PER_SEC;
   while (!quitting)
   {
     // TODO: Reset frame times once per second to prevent rounding
