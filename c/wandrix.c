@@ -95,7 +95,7 @@ int init()
   return 1;
 }
 
-int loadImage(const char* path, struct Size* size, SDL_Surface** surface, SDL_Texture** texture)
+int loadImage(const char* path, SDL_Surface** surface, SDL_Texture** texture)
 {
   assert(path);
   assert(surface);
@@ -106,42 +106,23 @@ int loadImage(const char* path, struct Size* size, SDL_Surface** surface, SDL_Te
     return 0;
   }
   *surface = SDL_ConvertSurface(loadedSurface, screen->format, 0);
+  SDL_FreeSurface(loadedSurface);
   if (!*surface)
   {
     fprintf(stderr, "Unable to optimize image '%s': %s\n", path, SDL_GetError());
-    goto loadError;
+    return 0;
   }
-  if (size != NULL && (loadedSurface->w != size->w || loadedSurface->h != size->h))
-  {
-    *surface = SDL_CreateRGBSurfaceWithFormat(
-        0, size->w, size->h, screen->format->BitsPerPixel, screen->format->format);
-    if (!*surface)
-    {
-      fprintf(stderr, "Unable to create surface '%s': %s\n", path, SDL_GetError());
-      goto loadError;
-    }
-    if (!SDL_BlitScaled(loadedSurface, NULL, *surface, NULL))
-    {
-      fprintf(stderr, "Unable to scale '%s': %s\n", path, SDL_GetError());
-      goto loadError;
-    }
-  }
-  SDL_FreeSurface(loadedSurface);
-  loadedSurface = NULL;
   if (texture)
   {
     *texture = SDL_CreateTextureFromSurface(renderer, *surface);
     if (!*texture)
     {
       fprintf(stderr, "Unable to create texture for image '%s': %s\n", path, SDL_GetError());
-      goto loadError;
+      SDL_FreeSurface(*surface);
+      return 0;
     }
   }
   return 1;
-loadError:
-  if (loadedSurface) SDL_FreeSurface(loadedSurface);
-  if (*surface) SDL_FreeSurface(*surface);
-  return 0;
 }
 
 /* const char* name; int x, y; int hpCur, hpMax;
@@ -149,14 +130,13 @@ loadError:
 
 int loadCharImage(struct CharBase* c)
 {
-  struct Size s = { 64, 64 };
-  return loadImage(c->imgFilename, &s, &c->img, &c->tex);
+  return loadImage(c->imgFilename, &c->img, &c->tex);
 }
 
 int loadAssets()
 {
   SDL_Surface* mapSurface;
-  if (!loadImage("map.png", NULL, &mapSurface, &map))
+  if (!loadImage("map.png", &mapSurface, &map))
     return 0;
   mapImageSize.w = mapSurface->w;
   mapImageSize.h = mapSurface->h;
