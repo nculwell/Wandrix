@@ -39,8 +39,7 @@ struct Size maxTextureSize;
 struct Size mapImageSize;
 int quitting = 0;
 struct Player player = {
-  { .name = "Player", .img = { .path = "ckclose.png" },
-    .pos = {0,0}, }
+  { .name = "Player", .img = { .path = "ckclose32.png" }, .pos = {0,0}, }
 };
 struct Npc npcs[128];
 
@@ -126,14 +125,6 @@ int loadImage(struct Image* img, int createTexture)
   return 1;
 }
 
-/* const char* name; int x, y; int hpCur, hpMax;
-   const char* imgFilename; SDL_Surface* img; SDL_Texture* tex; */
-
-int loadCharImage(struct CharBase* c)
-{
-  return loadImage(&c->img, 1);
-}
-
 int loadAssets()
 {
   if (!loadImage(&map, 1))
@@ -141,7 +132,7 @@ int loadAssets()
   mapImageSize.w = map.sfc->w;
   mapImageSize.h = map.sfc->h;
   SDL_FreeSurface(map.sfc);
-  if (!loadCharImage(&player.c))
+  if (!loadImage(&player.c.img, 1))
   {
     fprintf(stderr, "Unable to load player image.\n");
     return 0;
@@ -201,13 +192,17 @@ const char* rectToString(SDL_Rect* r, char* buf) {
   return buf;
 }
 
+// Arguments:
+// - screenRect is the position of the screen (viewport) relative to the map.
+// - texture is the texture to draw.
+// - textureRect is the position/size of the texture relative to the map.
+// Summary:
+// Finds the intersection of the viewport with the texture and draws the visible part.
 int drawTexture(SDL_Rect* screenRect, SDL_Texture* texture, SDL_Rect* textureRect)
 {
-  char b1[64], b2[64];
   SDL_Rect intersectRect;
   int intersects =
     (SDL_TRUE == SDL_IntersectRect(screenRect, textureRect, &intersectRect));
-  printf("INTERSECT %s, %s ", rectToString(screenRect, b1), rectToString(textureRect, b2));
   if (intersects) {
     SDL_Rect sourceRect = {
       intersectRect.x - textureRect->x,
@@ -217,11 +212,7 @@ int drawTexture(SDL_Rect* screenRect, SDL_Texture* texture, SDL_Rect* textureRec
       intersectRect.x - screenRect->x,
       intersectRect.y - screenRect->y,
       intersectRect.w, intersectRect.h };
-    printf("DRAW: (%d,%d)/(%d,%d)\n", screenDestRect.x, screenDestRect.y, screenDestRect.w, screenDestRect.h);
     SDL_RenderCopy(renderer, texture, &sourceRect, &screenDestRect);
-  }
-  else {
-    printf("SKIPPED\n");
   }
   return intersects;
 }
@@ -237,7 +228,7 @@ void drawChar(SDL_Rect* screenRect, struct CharBase* c)
   SDL_Rect charRect = {
     c->pos.x, c->pos.y,
     c->img.sfc->w, c->img.sfc->h };
-  printf("CHAR: (%d,%d)/(%d,%d) ", charRect.x, charRect.y, charRect.w, charRect.h);
+  //printf("CHAR: (%d,%d)/(%d,%d) ", charRect.x, charRect.y, charRect.w, charRect.h);
   drawTexture(screenRect, c->img.tex, &charRect);
 }
 
