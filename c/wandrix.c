@@ -14,6 +14,15 @@ const int FULLSCREEN = 0;
 const int VSYNC = 1;
 const Uint32 LOGIC_FRAMES_PER_SEC = 16; // fixed rate
 const Uint32 RENDER_FRAMES_PER_SEC = 32; // rate cap
+#define NPC_COUNT 128
+
+// Keep track of some keydown events that need to be combined with scan handling.
+Uint32 keypresses;
+const Uint32
+  KEY_UP = 0x01,
+  KEY_DOWN = 0x02,
+  KEY_LEFT = 0x04,
+  KEY_RIGHT = 0x08;
 
 struct Coords { int x, y; };
 struct Size { int w, h; };
@@ -27,6 +36,7 @@ struct Player {
   struct CharBase c;
 };
 struct Npc {
+  int set; // false if this slot is empty
   struct CharBase c;
 };
 
@@ -41,7 +51,7 @@ int quitting = 0;
 struct Player player = {
   { .name = "Player", .img = { .path = "ckclose32.png" }, .pos = {0,0}, }
 };
-struct Npc npcs[128];
+struct Npc npcs[NPC_COUNT];
 
 void atExitHandler()
 {
@@ -144,16 +154,14 @@ struct Coords scanMoveKeys()
 {
   struct Coords move = {0,0};
   const Uint8* currentKeyStates = SDL_GetKeyboardState( NULL );
-  if (currentKeyStates[SDL_SCANCODE_UP])
+  if (currentKeyStates[SDL_SCANCODE_UP] || keypresses & KEY_UP)
     move.y -= 1;
-  if (currentKeyStates[SDL_SCANCODE_DOWN])
+  if (currentKeyStates[SDL_SCANCODE_DOWN] || keypresses & KEY_DOWN)
     move.y += 1;
-  if (currentKeyStates[SDL_SCANCODE_LEFT])
+  if (currentKeyStates[SDL_SCANCODE_LEFT] || keypresses & KEY_LEFT)
     move.x -= 1;
-  if (currentKeyStates[SDL_SCANCODE_RIGHT])
+  if (currentKeyStates[SDL_SCANCODE_RIGHT] || keypresses & KEY_RIGHT)
     move.x += 1;
-  //if (currentKeyStates[SDL_SCANCODE_Q])
-  //  quitting = 1;
   return move;
 }
 
@@ -180,6 +188,8 @@ void updateLogic()
   // Get next move. (We need it now to interpolate.)
   player.c.mov = scanMoveKeys();
   // TODO: Cancel move if invalid.
+  // Reset keypress monitor.
+  keypresses = 0;
 }
 
 void updateDisplay(Uint32 phase)
@@ -187,7 +197,8 @@ void updateDisplay(Uint32 phase)
   // TODO: Interpolate object positions.
 }
 
-const char* rectToString(SDL_Rect* r, char* buf) {
+const char* rectToString(SDL_Rect* r, char* buf)
+{
   sprintf(buf, "(x=%d,y=%d,w=%d,h=%d)", r->x, r->y, r->w, r->h);
   return buf;
 }
@@ -203,7 +214,8 @@ int drawTexture(SDL_Rect* screenRect, SDL_Texture* texture, SDL_Rect* textureRec
   SDL_Rect intersectRect;
   int intersects =
     (SDL_TRUE == SDL_IntersectRect(screenRect, textureRect, &intersectRect));
-  if (intersects) {
+  if (intersects)
+  {
     SDL_Rect sourceRect = {
       intersectRect.x - textureRect->x,
       intersectRect.y - textureRect->y,
@@ -239,6 +251,13 @@ void drawPlayer(SDL_Rect* screenRect)
 
 void drawNpcs(SDL_Rect* screenRect)
 {
+  for (int i=0; i < NPC_COUNT; ++i)
+  {
+    if (npcs[i].set)
+    {
+      drawChar(screenRect, &npcs[i].c);
+    }
+  }
 }
 
 void draw()
@@ -256,20 +275,27 @@ void draw()
 
 void handleKeypress(SDL_Event* e)
 {
-  switch (e->key.keysym.sym) {
-    // case SDLK_UP:
+  switch (e->key.keysym.sym)
+  {
     case SDLK_q: quitting = 1; break;
+    case SDLK_UP: keypresses |= KEY_UP; break;
+    case SDLK_DOWN: keypresses |= KEY_DOWN; break;
+    case SDLK_LEFT: keypresses |= KEY_LEFT; break;
+    case SDLK_RIGHT: keypresses |= KEY_RIGHT; break;
   }
 }
 
 void pollEvents()
 {
   SDL_Event e;
-  if (SDL_PollEvent(&e)) {
-    if (e.type == SDL_QUIT) {
+  if (SDL_PollEvent(&e))
+  {
+    if (e.type == SDL_QUIT)
+    {
       quitting = 1;
     }
-    if (e.type == SDL_KEYDOWN) {
+    if (e.type == SDL_KEYDOWN)
+    {
       handleKeypress(&e);
     }
   }
@@ -290,17 +316,20 @@ int mainLoop()
     pollEvents();
     if (nextLogicFrameTime > time)
       SDL_Delay(0); // Be a little nice with the CPU when ahead of schedule.
-    while (nextLogicFrameTime < time) {
+    while (nextLogicFrameTime < time)
+    {
       nextLogicFrameTime += logicFrameTimeMs;
       updateLogic();
     }
     //int skipDraw = 0;
     int skipDraw = 1;
-    while (nextRenderFrame < time) {
+    while (nextRenderFrame < time)
+    {
       nextRenderFrame += renderFrameTimeMs;
       skipDraw = 0;
     }
-    if (!skipDraw) {
+    if (!skipDraw)
+    {
       Uint32 phase = 1000 - (nextLogicFrameTime - time) * 1000 / LOGIC_FRAMES_PER_SEC;
       updateLogic(phase);
       draw();
