@@ -13,7 +13,7 @@ const int SCREEN_H = 600;
 const int FULLSCREEN = 0;
 const int VSYNC = 1;
 const Uint32 LOGIC_FRAMES_PER_SEC = 16; // fixed rate
-const Uint32 RENDER_FRAMES_PER_SEC = 32; // rate cap
+const Uint32 RENDER_FRAMES_PER_SEC = 50; // rate cap
 #define NPC_COUNT 128
 
 // Keep track of some keydown events that need to be combined with scan handling.
@@ -187,14 +187,41 @@ struct Coords scanMoveKeys()
   return move;
 }
 
+SDL_Rect CharRect(struct CharBase* c)
+{
+  SDL_Rect r = { c->pos.x, c->pos.y, c->img.sfc->w, c->img.sfc->h };
+  return r;
+}
+
+int detectPlayerCollision()
+{
+  SDL_Rect playerRect = CharRect(&player.c);
+  playerRect.x += player.c.mov.x * 8;
+  playerRect.y += player.c.mov.y * 8;
+  for (int i=0; i < NPC_COUNT; ++i)
+  {
+    if (npcs[i].id)
+    {
+      SDL_Rect npcRect = CharRect(&npcs[i].c);
+      SDL_Rect intersectRect;
+      int collide = (SDL_TRUE == SDL_IntersectRect(&playerRect, &npcRect, &intersectRect));
+      if (collide) return npcs[i].id;
+    }
+  }
+  return 0;
+}
+
 void updateLogic()
 {
+  struct Coords noMove = {0,0};
   // Apply previous move.
   player.c.pos.x += player.c.mov.x * 8;
   player.c.pos.y += player.c.mov.y * 8;
   // Get next move. (We need it now to interpolate.)
   player.c.mov = scanMoveKeys();
-  // TODO: Cancel move if invalid.
+  // Cancel move if invalid.
+  if (detectPlayerCollision())
+    player.c.mov = noMove;
   // Reset keypress monitor.
   keypresses = 0;
 }
@@ -328,7 +355,6 @@ int mainLoop()
       nextLogicFrameTime += logicFrameTimeMs;
       updateLogic();
     }
-    //int skipDraw = 0;
     int skipDraw = 1;
     while (nextRenderFrame < time)
     {
