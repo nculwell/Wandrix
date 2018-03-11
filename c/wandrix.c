@@ -27,7 +27,7 @@ const Uint32
 struct Coords { int x, y; };
 struct Size { int w, h; };
 struct Image { 
-  const char* path; SDL_Surface* sfc; SDL_Texture* tex;
+  const char path[32]; SDL_Surface* sfc; SDL_Texture* tex;
 };
 struct CharBase {
   const char* name; struct Image img; struct Coords pos, mov; int hpCur, hpMax;
@@ -36,7 +36,7 @@ struct Player {
   struct CharBase c;
 };
 struct Npc {
-  int set; // false if this slot is empty
+  int id; // set to 0 if this slot is empty
   struct CharBase c;
 };
 
@@ -49,9 +49,14 @@ struct Size maxTextureSize;
 struct Size mapImageSize;
 int quitting = 0;
 struct Player player = {
-  { .name = "Player", .img = { .path = "ckclose32.png" }, .pos = {0,0}, }
+  { .name = "Player", .img = { .path = "y32.png" }, .pos = {0,0}, }
 };
-struct Npc npcs[NPC_COUNT];
+struct Npc npcs[NPC_COUNT] = {
+  { .c = { .name = "Kit", .img = { .path = "ckclose32.png" }, .pos = {64,64}, } },
+  { .c = { .name = "Daisy", .img = { .path = "daisy32.png" }, .pos = {96,64}, } },
+  { .c = { .name = "Cindy", .img = { .path = "cstar32.png" }, .pos = {64,96}, } },
+  { .c = { .name = "Desix", .img = { .path = "desix32.png" }, .pos = {96,96}, } },
+};
 
 void atExitHandler()
 {
@@ -135,10 +140,26 @@ int loadImage(struct Image* img, int createTexture)
   return 1;
 }
 
+int loadNpcs()
+{
+  for (int i=0; i < NPC_COUNT; ++i)
+  {
+    if (npcs[i].c.img.path[0])
+    {
+      npcs[i].id = i;
+      if (!loadImage(&npcs[i].c.img, 1))
+      {
+        fprintf(stderr, "Unable to load NPC image.\n");
+        return 0;
+      }
+    }
+  }
+  return 1;
+}
+
 int loadAssets()
 {
-  if (!loadImage(&map, 1))
-    return 0;
+  if (!loadImage(&map, 1)) return 0;
   mapImageSize.w = map.sfc->w;
   mapImageSize.h = map.sfc->h;
   SDL_FreeSurface(map.sfc);
@@ -147,6 +168,7 @@ int loadAssets()
     fprintf(stderr, "Unable to load player image.\n");
     return 0;
   }
+  if (!loadNpcs()) return 0;
   return 1;
 }
 
@@ -164,21 +186,6 @@ struct Coords scanMoveKeys()
     move.x += 1;
   return move;
 }
-
-/*
-function scanMoveKeys()
-  local move = {x=0, y=0}
-  local m = glo.moveKeys
-  glo.moveKeys = {}
-  if love.keyboard.isDown("left") or m["left"] then move.x = move.x - 1 end
-  if love.keyboard.isDown("right") or m["right"] then move.x = move.x + 1 end
-  if love.keyboard.isDown("up") or m["up"] then move.y = move.y - 1 end
-  if love.keyboard.isDown("down") or m["down"] then move.y = move.y + 1 end
-  move.x = move.x / MOVES_PER_TILE
-  move.y = move.y / MOVES_PER_TILE
-  return move
-end
-*/
 
 void updateLogic()
 {
@@ -253,7 +260,7 @@ void drawNpcs(SDL_Rect* screenRect)
 {
   for (int i=0; i < NPC_COUNT; ++i)
   {
-    if (npcs[i].set)
+    if (npcs[i].id)
     {
       drawChar(screenRect, &npcs[i].c);
     }
