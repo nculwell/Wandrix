@@ -1,17 +1,12 @@
 /* vim: nu et ai ts=2 sts=2 sw=2
 */
 
-#include <SDL.h>
+#include "wandrix.h"
 #include <SDL_image.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <assert.h>
 
 const char* WINDOW_NAME = "Wandrix";
-const int SCREEN_W = 800;
-const int SCREEN_H = 600;
-const int FULLSCREEN = 0;
-const int VSYNC = 1;
+const int SCREEN_W = 800, SCREEN_H = 600;
+const int FULLSCREEN = 0, VSYNC = 1;
 const Uint32 LOGIC_FRAMES_PER_SEC = 16; // fixed rate
 const Uint32 RENDER_FRAMES_PER_SEC = 50; // rate cap
 #define NPC_COUNT 128
@@ -24,22 +19,6 @@ const Uint32
   KEY_LEFT = 0x04,
   KEY_RIGHT = 0x08;
 
-struct Coords { int x, y; };
-struct Size { int w, h; };
-struct Image { 
-  const char path[32]; SDL_Surface* sfc; SDL_Texture* tex;
-};
-struct CharBase {
-  const char* name; struct Image img; struct Coords pos, mov; int hpCur, hpMax;
-};
-struct Player {
-  struct CharBase c;
-};
-struct Npc {
-  int id; // set to 0 if this slot is empty
-  struct CharBase c;
-};
-
 SDL_Window* window;
 SDL_Renderer* renderer;
 SDL_Surface* screen;
@@ -48,9 +27,11 @@ struct Coords center;
 struct Size maxTextureSize;
 struct Size mapImageSize;
 int quitting = 0;
+
 struct Player player = {
   { .name = "Player", .img = { .path = "y32.png" }, .pos = {0,0}, }
 };
+
 struct Npc npcs[NPC_COUNT] = {
   { .c = { .name = "Kit", .img = { .path = "ckclose32.png" }, .pos = {64,64}, } },
   { .c = { .name = "Daisy", .img = { .path = "daisy32.png" }, .pos = {96,64}, } },
@@ -187,23 +168,19 @@ struct Coords scanMoveKeys()
   return move;
 }
 
-SDL_Rect CharRect(struct CharBase* c)
-{
-  SDL_Rect r = { c->pos.x, c->pos.y, c->img.sfc->w, c->img.sfc->h };
-  return r;
-}
-
 int detectPlayerCollision()
 {
-  SDL_Rect playerRect = CharRect(&player.c);
-  playerRect.x += player.c.mov.x * 8;
-  playerRect.y += player.c.mov.y * 8;
+  struct Coords playerMovedPos = Coords_Add(player.c.pos, player.c.mov);
+  SDL_Rect playerRect = Rect_Combine(playerMovedPos, CharBase_GetSize(&player.c));
   for (int i=0; i < NPC_COUNT; ++i)
   {
     if (npcs[i].id)
     {
-      SDL_Rect npcRect = CharRect(&npcs[i].c);
+      SDL_Rect npcRect = CharBase_GetRect(&npcs[i].c);
       SDL_Rect intersectRect;
+      //printf("INTERSECT: PC=(%d,%d,%d,%d) NPC=(%d,%d,%d,%d)\n",
+      //    playerRect.x, playerRect.y, playerRect.w, playerRect.h,
+      //    npcRect.x, npcRect.y, npcRect.w, npcRect.h);
       int collide = (SDL_TRUE == SDL_IntersectRect(&playerRect, &npcRect, &intersectRect));
       if (collide) return npcs[i].id;
     }
@@ -215,10 +192,10 @@ void updateLogic()
 {
   struct Coords noMove = {0,0};
   // Apply previous move.
-  player.c.pos.x += player.c.mov.x * 8;
-  player.c.pos.y += player.c.mov.y * 8;
+  player.c.pos = Coords_Add(player.c.pos, player.c.mov);
   // Get next move. (We need it now to interpolate.)
   player.c.mov = scanMoveKeys();
+  player.c.mov = Coords_Scale(8, player.c.mov);
   // Cancel move if invalid.
   if (detectPlayerCollision())
     player.c.mov = noMove;
@@ -229,12 +206,6 @@ void updateLogic()
 void updateDisplay(Uint32 phase)
 {
   // TODO: Interpolate object positions.
-}
-
-const char* rectToString(SDL_Rect* r, char* buf)
-{
-  sprintf(buf, "(x=%d,y=%d,w=%d,h=%d)", r->x, r->y, r->w, r->h);
-  return buf;
 }
 
 // Arguments:
