@@ -12,7 +12,7 @@ struct Image {
   const char path[32]; SDL_Surface* sfc; SDL_Texture* tex;
 };
 struct CharBase {
-  const char* name; struct Image img; struct Coords pos, mov; int hpCur, hpMax;
+  const char* name; struct Image img; struct Coords pos, mov, phs; int hpCur, hpMax;
 };
 struct Player {
   struct CharBase c;

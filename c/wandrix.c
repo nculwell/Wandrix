@@ -1,8 +1,10 @@
+#define PHASE_GRAIN 1000
 /* vim: nu et ai ts=2 sts=2 sw=2
 */
 
 #include "wandrix.h"
 #include <SDL_image.h>
+#define PHASE_GRAIN 1000
 
 const char* WINDOW_NAME = "Wandrix";
 const int SCREEN_W = 800, SCREEN_H = 600;
@@ -39,7 +41,7 @@ struct Npc npcs[NPC_COUNT] = {
   { .c = { .name = "Desix", .img = { .path = "desix32.png" }, .pos = {96,96}, } },
 };
 
-void atExitHandler()
+void AtExitHandler()
 {
   //SDL_DestroyTexture(bitmapTex);
   SDL_DestroyRenderer(renderer);
@@ -47,7 +49,7 @@ void atExitHandler()
   SDL_Quit();
 }
 
-int init()
+int Init()
 {
   if(SDL_Init(SDL_INIT_VIDEO) < 0)
   {
@@ -88,11 +90,11 @@ int init()
   screen = SDL_GetWindowSurface(window);
   center.x = screen->w / 2;
   center.y = screen->h / 2;
-  atexit(atExitHandler);
+  atexit(AtExitHandler);
   return 1;
 }
 
-int loadImage(struct Image* img, int createTexture)
+int LoadImage(struct Image* img, int createTexture)
 {
   assert(img);
   assert(img->path);
@@ -121,14 +123,14 @@ int loadImage(struct Image* img, int createTexture)
   return 1;
 }
 
-int loadNpcs()
+int LoadNpcs()
 {
   for (int i=0; i < NPC_COUNT; ++i)
   {
     if (npcs[i].c.img.path[0])
     {
       npcs[i].id = i;
-      if (!loadImage(&npcs[i].c.img, 1))
+      if (!LoadImage(&npcs[i].c.img, 1))
       {
         fprintf(stderr, "Unable to load NPC image.\n");
         return 0;
@@ -138,22 +140,22 @@ int loadNpcs()
   return 1;
 }
 
-int loadAssets()
+int LoadAssets()
 {
-  if (!loadImage(&map, 1)) return 0;
+  if (!LoadImage(&map, 1)) return 0;
   mapImageSize.w = map.sfc->w;
   mapImageSize.h = map.sfc->h;
   SDL_FreeSurface(map.sfc);
-  if (!loadImage(&player.c.img, 1))
+  if (!LoadImage(&player.c.img, 1))
   {
     fprintf(stderr, "Unable to load player image.\n");
     return 0;
   }
-  if (!loadNpcs()) return 0;
+  if (!LoadNpcs()) return 0;
   return 1;
 }
 
-struct Coords scanMoveKeys()
+struct Coords ScanMoveKeys()
 {
   struct Coords move = {0,0};
   const Uint8* currentKeyStates = SDL_GetKeyboardState( NULL );
@@ -168,7 +170,7 @@ struct Coords scanMoveKeys()
   return move;
 }
 
-int detectPlayerCollision()
+int DetectPlayerCollision()
 {
   struct Coords playerMovedPos = Coords_Add(player.c.pos, player.c.mov);
   SDL_Rect playerRect = Rect_Combine(playerMovedPos, CharBase_GetSize(&player.c));
@@ -188,24 +190,19 @@ int detectPlayerCollision()
   return 0;
 }
 
-void updateLogic()
+void UpdateLogic()
 {
   struct Coords noMove = {0,0};
   // Apply previous move.
   player.c.pos = Coords_Add(player.c.pos, player.c.mov);
   // Get next move. (We need it now to interpolate.)
-  player.c.mov = scanMoveKeys();
+  player.c.mov = ScanMoveKeys();
   player.c.mov = Coords_Scale(8, player.c.mov);
   // Cancel move if invalid.
-  if (detectPlayerCollision())
+  if (DetectPlayerCollision())
     player.c.mov = noMove;
   // Reset keypress monitor.
   keypresses = 0;
-}
-
-void updateDisplay(Uint32 phase)
-{
-  // TODO: Interpolate object positions.
 }
 
 // Arguments:
@@ -214,7 +211,7 @@ void updateDisplay(Uint32 phase)
 // - textureRect is the position/size of the texture relative to the map.
 // Summary:
 // Finds the intersection of the viewport with the texture and draws the visible part.
-int drawTexture(SDL_Rect* screenRect, SDL_Texture* texture, SDL_Rect* textureRect)
+int DrawTexture(SDL_Rect* screenRect, SDL_Texture* texture, SDL_Rect* textureRect)
 {
   SDL_Rect intersectRect;
   int intersects =
@@ -234,51 +231,48 @@ int drawTexture(SDL_Rect* screenRect, SDL_Texture* texture, SDL_Rect* textureRec
   return intersects;
 }
 
-void drawMap(SDL_Rect* screenRect)
+void DrawMap(SDL_Rect* screenRect)
 {
   SDL_Rect wholeMapRect = { 0, 0, mapImageSize.w, mapImageSize.h };
-  drawTexture(screenRect, map.tex, &wholeMapRect);
+  DrawTexture(screenRect, map.tex, &wholeMapRect);
 }
 
-void drawChar(SDL_Rect* screenRect, struct CharBase* c)
+void DrawChar(SDL_Rect* screenRect, struct CharBase* c, int phase)
 {
-  SDL_Rect charRect = {
-    c->pos.x, c->pos.y,
-    c->img.sfc->w, c->img.sfc->h };
+  int dx = (c->mov.x - c->pos.x) * phase / PHASE_GRAIN,
+      dy = (c->mov.y - c->pos.y) * phase / PHASE_GRAIN;
+  printf("PHASE: %d  POS: (%d,%d)\n", phase, dx, dy);
+  SDL_Rect charRect = { c->pos.x + dx, c->pos.y + dy, c->img.sfc->w, c->img.sfc->h };
   //printf("CHAR: (%d,%d)/(%d,%d) ", charRect.x, charRect.y, charRect.w, charRect.h);
-  drawTexture(screenRect, c->img.tex, &charRect);
+  DrawTexture(screenRect, c->img.tex, &charRect);
 }
 
-void drawPlayer(SDL_Rect* screenRect)
+void DrawPlayer(SDL_Rect* screenRect, int phase)
 {
-  drawChar(screenRect, &player.c);
+  DrawChar(screenRect, &player.c, phase);
 }
 
-void drawNpcs(SDL_Rect* screenRect)
+void DrawNpcs(SDL_Rect* screenRect, int phase)
 {
   for (int i=0; i < NPC_COUNT; ++i)
-  {
     if (npcs[i].id)
-    {
-      drawChar(screenRect, &npcs[i].c);
-    }
-  }
+      DrawChar(screenRect, &npcs[i].c, phase);
 }
 
-void draw()
+void Draw(int phase)
 {
   SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0xFF);
   SDL_RenderClear(renderer);
   SDL_Rect screenRect = {
     player.c.pos.x - center.x, player.c.pos.y - center.y,
     screen->w, screen->h };
-  drawMap(&screenRect);
-  drawPlayer(&screenRect);
-  drawNpcs(&screenRect);
+  DrawMap(&screenRect);
+  DrawPlayer(&screenRect, phase);
+  DrawNpcs(&screenRect, phase);
   SDL_RenderPresent(renderer);
 }
 
-void handleKeypress(SDL_Event* e)
+void HandleKeypress(SDL_Event* e)
 {
   switch (e->key.keysym.sym)
   {
@@ -290,23 +284,19 @@ void handleKeypress(SDL_Event* e)
   }
 }
 
-void pollEvents()
+void PollEvents()
 {
   SDL_Event e;
   if (SDL_PollEvent(&e))
   {
     if (e.type == SDL_QUIT)
-    {
       quitting = 1;
-    }
     if (e.type == SDL_KEYDOWN)
-    {
-      handleKeypress(&e);
-    }
+      HandleKeypress(&e);
   }
 }
 
-int mainLoop()
+int MainLoop()
 {
   Uint32 startTime = SDL_GetTicks(),
          nextLogicFrameTime = 0,
@@ -318,13 +308,13 @@ int mainLoop()
     // TODO: Reset frame times once per second to prevent rounding
     // error from accumulating.
     Uint32 time = SDL_GetTicks() - startTime;
-    pollEvents();
+    PollEvents();
     if (nextLogicFrameTime > time)
       SDL_Delay(0); // Be a little nice with the CPU when ahead of schedule.
     while (nextLogicFrameTime < time)
     {
       nextLogicFrameTime += logicFrameTimeMs;
-      updateLogic();
+      UpdateLogic();
     }
     int skipDraw = 1;
     while (nextRenderFrame < time)
@@ -334,9 +324,9 @@ int mainLoop()
     }
     if (!skipDraw)
     {
-      Uint32 phase = 1000 - (nextLogicFrameTime - time) * 1000 / LOGIC_FRAMES_PER_SEC;
-      updateLogic(phase);
-      draw();
+      int phase = PHASE_GRAIN - (nextLogicFrameTime - time) * PHASE_GRAIN / LOGIC_FRAMES_PER_SEC;
+      printf("PHASE: %d\n", phase);
+      Draw(phase);
     }
   }
   return 1;
@@ -345,7 +335,7 @@ int mainLoop()
 int main(int argc, char** argv)
 {
   printf("STARTED\n");
-  int success = init() && loadAssets() && mainLoop();
+  int success = Init() && LoadAssets() && MainLoop();
   printf("FINISHED\n");
   return !success;
 }
