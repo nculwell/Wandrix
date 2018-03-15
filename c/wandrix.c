@@ -1,4 +1,3 @@
-#define PHASE_GRAIN 1000
 /* vim: nu et ai ts=2 sts=2 sw=2
 */
 
@@ -43,7 +42,7 @@ struct Npc npcs[NPC_COUNT] = {
 
 void AtExitHandler()
 {
-  //SDL_DestroyTexture(bitmapTex);
+  // TODO: Destroy textures and surfaces
   SDL_DestroyRenderer(renderer);
   SDL_DestroyWindow(window);
   SDL_Quit();
@@ -301,8 +300,8 @@ int MainLoop()
   Uint32 startTime = SDL_GetTicks(),
          nextLogicFrameTime = 0,
          nextRenderFrame = 0,
-         logicFrameTimeMs = 1000 / LOGIC_FRAMES_PER_SEC,
-         renderFrameTimeMs = 1000 / RENDER_FRAMES_PER_SEC;
+         logicFrameDurationMs = 1000 / LOGIC_FRAMES_PER_SEC,
+         renderFrameDurationMs = 1000 / RENDER_FRAMES_PER_SEC;
   while (!quitting)
   {
     // TODO: Reset frame times once per second to prevent rounding
@@ -313,18 +312,18 @@ int MainLoop()
       SDL_Delay(0); // Be a little nice with the CPU when ahead of schedule.
     while (nextLogicFrameTime < time)
     {
-      nextLogicFrameTime += logicFrameTimeMs;
+      nextLogicFrameTime += logicFrameDurationMs;
       UpdateLogic();
     }
     int skipDraw = 1;
     while (nextRenderFrame < time)
     {
-      nextRenderFrame += renderFrameTimeMs;
+      nextRenderFrame += renderFrameDurationMs;
       skipDraw = 0;
     }
     if (!skipDraw)
     {
-      int phase = PHASE_GRAIN - (nextLogicFrameTime - time) * PHASE_GRAIN / LOGIC_FRAMES_PER_SEC;
+      int phase = PHASE_GRAIN - (nextLogicFrameTime - time) * PHASE_GRAIN / logicFrameDurationMs;
       printf("PHASE: %d\n", phase);
       Draw(phase);
     }
