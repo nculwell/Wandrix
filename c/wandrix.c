@@ -24,21 +24,21 @@ const Uint32
 SDL_Window* window;
 SDL_Renderer* renderer;
 SDL_Surface* screen;
-struct Image map = { .path = "map.png" };
+struct Image map = { .path = "testimg/map.png" };
 struct Coords center;
 struct Size maxTextureSize;
 struct Size mapImageSize;
 int quitting = 0;
 
 struct Player player = {
-  { .name = "Player", .img = { .path = "y32.png" }, .pos = {0,0}, }
+  { .name = "Player", .img = { .path = "testimg/y32.png" }, .pos = {0,0}, }
 };
 
 struct Npc npcs[NPC_COUNT] = {
-  { .c = { .name = "Kit", .img = { .path = "ckclose32.png" }, .pos = {64,64}, } },
-  { .c = { .name = "Daisy", .img = { .path = "daisy32.png" }, .pos = {96,64}, } },
-  { .c = { .name = "Cindy", .img = { .path = "cstar32.png" }, .pos = {64,96}, } },
-  { .c = { .name = "Desix", .img = { .path = "desix32.png" }, .pos = {96,96}, } },
+  { .c = { .name = "Kit", .img = { .path = "testimg/ckclose32.png" }, .pos = {64,64}, } },
+  { .c = { .name = "Daisy", .img = { .path = "testimg/daisy32.png" }, .pos = {96,64}, } },
+  { .c = { .name = "Cindy", .img = { .path = "testimg/cstar32.png" }, .pos = {64,96}, } },
+  { .c = { .name = "Desix", .img = { .path = "testimg/desix32.png" }, .pos = {96,96}, } },
 };
 
 void AtExitHandler()
