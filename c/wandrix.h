@@ -24,6 +24,9 @@ struct Npc {
   struct CharBase c;
 };
 
+#define Rect_UNPACK(SDL_RECT_PTR) \
+  ((SDL_RECT_PTR)->x), ((SDL_RECT_PTR)->y), ((SDL_RECT_PTR)->w), ((SDL_RECT_PTR)->h)
+
 struct Coords Coords_Scale(int scalar, struct Coords s);
 struct Coords Coords_Add(struct Coords a, struct Coords b);
 struct SDL_Rect Rect_Combine(struct Coords c, struct Size s);

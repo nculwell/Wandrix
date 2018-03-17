@@ -3,13 +3,14 @@
 
 #include "wandrix.h"
 #include <SDL_image.h>
-#define PHASE_GRAIN 1000
+#define PHASE_GRAIN 10000
 
 const char* WINDOW_NAME = "Wandrix";
 const int SCREEN_W = 800, SCREEN_H = 600;
 const int FULLSCREEN = 0, VSYNC = 1;
 const Uint32 LOGIC_FRAMES_PER_SEC = 16; // fixed rate
-const Uint32 RENDER_FRAMES_PER_SEC = 50; // rate cap
+//const Uint32 RENDER_FRAMES_PER_SEC = 60; // rate cap
+const Uint32 RENDER_FRAMES_PER_SEC = 0; // rate cap
 #define NPC_COUNT 128
 
 // Keep track of some keydown events that need to be combined with scan handling.
@@ -204,6 +205,8 @@ void UpdateLogic()
   keypresses = 0;
 }
 
+int PRINT_IN_DRAW_TEXTURE = 0;
+
 // Arguments:
 // - screenRect is the position of the screen (viewport) relative to the map.
 // - texture is the texture to draw.
@@ -225,6 +228,9 @@ int DrawTexture(SDL_Rect* screenRect, SDL_Texture* texture, SDL_Rect* textureRec
       intersectRect.x - screenRect->x,
       intersectRect.y - screenRect->y,
       intersectRect.w, intersectRect.h };
+    if (PRINT_IN_DRAW_TEXTURE) printf("SCREEN RECT: %d,%d | %d,%d\n", Rect_UNPACK(screenRect));
+    if (PRINT_IN_DRAW_TEXTURE) printf("TXTURE RECT: %d,%d | %d,%d\n", Rect_UNPACK(textureRect));
+    if (PRINT_IN_DRAW_TEXTURE) printf("DEST RECT:   %d,%d | %d,%d\n", Rect_UNPACK(&screenDestRect));
     SDL_RenderCopy(renderer, texture, &sourceRect, &screenDestRect);
   }
   return intersects;
@@ -238,17 +244,23 @@ void DrawMap(SDL_Rect* screenRect)
 
 void DrawChar(SDL_Rect* screenRect, struct CharBase* c, int phase)
 {
-  int dx = (c->mov.x - c->pos.x) * phase / PHASE_GRAIN,
-      dy = (c->mov.y - c->pos.y) * phase / PHASE_GRAIN;
-  printf("PHASE: %d  POS: (%d,%d)\n", phase, dx, dy);
+  int dx = c->mov.x * phase / PHASE_GRAIN,
+      dy = c->mov.y * phase / PHASE_GRAIN;
+  //if (phase==0) printf("PHASE: %4d  POS: (%d,%d)  MOV: (%d,%d)  DELTA: (%d,%d)  CHAR: %s", phase, c->pos.x, c->pos.y, c->mov.x, c->mov.y, dx, dy, c->name);
   SDL_Rect charRect = { c->pos.x + dx, c->pos.y + dy, c->img.sfc->w, c->img.sfc->h };
-  //printf("CHAR: (%d,%d)/(%d,%d) ", charRect.x, charRect.y, charRect.w, charRect.h);
+  //if (phase==0) printf(" RECT: (%d,%d,%d,%d)\n", charRect.x, charRect.y, charRect.w, charRect.h);
+  if (phase==0) PRINT_IN_DRAW_TEXTURE=1;
   DrawTexture(screenRect, c->img.tex, &charRect);
+  PRINT_IN_DRAW_TEXTURE=0;
 }
 
 void DrawPlayer(SDL_Rect* screenRect, int phase)
 {
-  DrawChar(screenRect, &player.c, phase);
+  // Send phase=0 because the player's movement phase is indicated by
+  // shifting the screen, not the image.
+  // (TODO: We'll have to change this later because phase might determine
+  // animation state as well.)
+  DrawChar(screenRect, &player.c, 0);
 }
 
 void DrawNpcs(SDL_Rect* screenRect, int phase)
@@ -263,7 +275,8 @@ void Draw(int phase)
   SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0xFF);
   SDL_RenderClear(renderer);
   SDL_Rect screenRect = {
-    player.c.pos.x - center.x, player.c.pos.y - center.y,
+    player.c.pos.x - center.x + player.c.mov.x * phase / PHASE_GRAIN,
+    player.c.pos.y - center.y + player.c.mov.y * phase / PHASE_GRAIN,
     screen->w, screen->h };
   DrawMap(&screenRect);
   DrawPlayer(&screenRect, phase);
@@ -300,8 +313,12 @@ int MainLoop()
   Uint32 startTime = SDL_GetTicks(),
          nextLogicFrameTime = 0,
          nextRenderFrame = 0,
+         nextSecond = 0,
          logicFrameDurationMs = 1000 / LOGIC_FRAMES_PER_SEC,
-         renderFrameDurationMs = 1000 / RENDER_FRAMES_PER_SEC;
+         logicFramesCount = 0,
+         renderFramesPerSecond = RENDER_FRAMES_PER_SEC > 0 ? RENDER_FRAMES_PER_SEC : 1000,
+         renderFrameDurationMs = 1000 / renderFramesPerSecond,
+         renderFramesCount = 0;
   while (!quitting)
   {
     // TODO: Reset frame times once per second to prevent rounding
@@ -310,20 +327,30 @@ int MainLoop()
     PollEvents();
     if (nextLogicFrameTime > time)
       SDL_Delay(0); // Be a little nice with the CPU when ahead of schedule.
+    while (nextSecond < time)
+    {
+      nextSecond += 1000;
+      printf("FPS: LOGIC=%d, RENDER=%d\n", logicFramesCount, renderFramesCount);
+      logicFramesCount = renderFramesCount = 0;
+    }
     while (nextLogicFrameTime < time)
     {
       nextLogicFrameTime += logicFrameDurationMs;
+      ++logicFramesCount;
       UpdateLogic();
     }
-    int skipDraw = 1;
+    int draw = 0;
     while (nextRenderFrame < time)
     {
       nextRenderFrame += renderFrameDurationMs;
-      skipDraw = 0;
+      ++renderFramesCount;
+      draw = 1;
     }
-    if (!skipDraw)
+    if (draw)
     {
       int phase = PHASE_GRAIN - (nextLogicFrameTime - time) * PHASE_GRAIN / logicFrameDurationMs;
+      assert(phase >= 0);
+      assert(phase <= PHASE_GRAIN);
       printf("PHASE: %d\n", phase);
       Draw(phase);
     }
