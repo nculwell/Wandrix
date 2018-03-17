@@ -256,11 +256,7 @@ void DrawChar(SDL_Rect* screenRect, struct CharBase* c, int phase)
 
 void DrawPlayer(SDL_Rect* screenRect, int phase)
 {
-  // Send phase=0 because the player's movement phase is indicated by
-  // shifting the screen, not the image.
-  // (TODO: We'll have to change this later because phase might determine
-  // animation state as well.)
-  DrawChar(screenRect, &player.c, 0);
+  DrawChar(screenRect, &player.c, phase);
 }
 
 void DrawNpcs(SDL_Rect* screenRect, int phase)
