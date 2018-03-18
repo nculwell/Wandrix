@@ -7,10 +7,10 @@
 
 const char* WINDOW_NAME = "Wandrix";
 const int SCREEN_W = 800, SCREEN_H = 600;
-const int FULLSCREEN = 0, VSYNC = 1;
-const Uint32 LOGIC_FRAMES_PER_SEC = 16; // fixed rate
-//const Uint32 RENDER_FRAMES_PER_SEC = 60; // rate cap
-const Uint32 RENDER_FRAMES_PER_SEC = 0; // rate cap
+const int FULLSCREEN = 1;
+const Uint32 LOGIC_FRAMES_PER_SEC = 20; // fixed rate
+const int MIN_FRAME_RATE_CAP = 30;
+const char* MAP_MASTER_FILENAME = "map_master.txt";
 #define NPC_COUNT 128
 
 // Keep track of some keydown events that need to be combined with scan handling.
@@ -24,6 +24,7 @@ const Uint32
 SDL_Window* window;
 SDL_Renderer* renderer;
 SDL_Surface* screen;
+int frameRateCap;
 struct Image map = { .path = "testimg/map.png" };
 struct Coords center;
 struct Size maxTextureSize;
@@ -35,7 +36,7 @@ struct Player player = {
 };
 
 struct Npc npcs[NPC_COUNT] = {
-  { .c = { .name = "Kit", .img = { .path = "testimg/ckclose32.png" }, .pos = {64,64}, } },
+  { .c = { .name = "Kit", .img = { .path = "testimg/ckclose32.png" }, .pos = {128,128}, } },
   { .c = { .name = "Daisy", .img = { .path = "testimg/daisy32.png" }, .pos = {96,64}, } },
   { .c = { .name = "Cindy", .img = { .path = "testimg/cstar32.png" }, .pos = {64,96}, } },
   { .c = { .name = "Desix", .img = { .path = "testimg/desix32.png" }, .pos = {96,96}, } },
@@ -71,8 +72,27 @@ int Init()
     fprintf(stderr, "Create window failed: %s\n", SDL_GetError());
     return 0;
   }
+  SDL_DisplayMode displayMode;
+  if (0 != SDL_GetCurrentDisplayMode(SDL_GetWindowDisplayIndex(window), &displayMode))
+  {
+    fprintf(stderr, "GetCurrentDisplayMode failed: %s\n", SDL_GetError());
+    return 0;
+  }
+  int vsync;
+  if (displayMode.refresh_rate >= MIN_FRAME_RATE_CAP)
+  {
+    frameRateCap = 0;
+    vsync = 1;
+  }
+  else
+  {
+    frameRateCap = displayMode.refresh_rate;
+    while (frameRateCap < MIN_FRAME_RATE_CAP)
+      frameRateCap *= 2;
+    vsync = 0;
+  }
   renderer = SDL_CreateRenderer(window, -1,
-      SDL_RENDERER_ACCELERATED | (VSYNC * SDL_RENDERER_PRESENTVSYNC));
+      SDL_RENDERER_ACCELERATED | (vsync * SDL_RENDERER_PRESENTVSYNC));
   if (!renderer)
   {
     fprintf(stderr, "Create renderer failed: %s\n", SDL_GetError());
@@ -140,8 +160,26 @@ int LoadNpcs()
   return 1;
 }
 
+int LoadMap()
+{
+  struct TextFile* master = ReadTextFile(MAP_MASTER_FILENAME);
+  if (!master) return 0;
+  assert(master->nLines == 5);
+  //const char* tilesetFilename = master->lines[0];
+  int rows = ParseInt16(master->lines[1]);
+  int cols = ParseInt16(master->lines[2]);
+  if (rows == SDL_MIN_SINT16 || cols == SDL_MIN_SINT16) return 0;
+  struct IntGrid* tiles = ReadGridFile(master->lines[3], rows, cols);
+  if (!tiles) return 0;
+  struct IntGrid* cover = ReadGridFile(master->lines[4], rows, cols);
+  if (!cover) return 0;
+  FreeTextFile(master);
+  return 1;
+}
+
 int LoadAssets()
 {
+  if (!LoadMap()) return 0;
   if (!LoadImage(&map, 1)) return 0;
   mapImageSize.w = map.sfc->w;
   mapImageSize.h = map.sfc->h;
@@ -228,9 +266,6 @@ int DrawTexture(SDL_Rect* screenRect, SDL_Texture* texture, SDL_Rect* textureRec
       intersectRect.x - screenRect->x,
       intersectRect.y - screenRect->y,
       intersectRect.w, intersectRect.h };
-    if (PRINT_IN_DRAW_TEXTURE) printf("SCREEN RECT: %d,%d | %d,%d\n", Rect_UNPACK(screenRect));
-    if (PRINT_IN_DRAW_TEXTURE) printf("TXTURE RECT: %d,%d | %d,%d\n", Rect_UNPACK(textureRect));
-    if (PRINT_IN_DRAW_TEXTURE) printf("DEST RECT:   %d,%d | %d,%d\n", Rect_UNPACK(&screenDestRect));
     SDL_RenderCopy(renderer, texture, &sourceRect, &screenDestRect);
   }
   return intersects;
@@ -246,12 +281,8 @@ void DrawChar(SDL_Rect* screenRect, struct CharBase* c, int phase)
 {
   int dx = c->mov.x * phase / PHASE_GRAIN,
       dy = c->mov.y * phase / PHASE_GRAIN;
-  //if (phase==0) printf("PHASE: %4d  POS: (%d,%d)  MOV: (%d,%d)  DELTA: (%d,%d)  CHAR: %s", phase, c->pos.x, c->pos.y, c->mov.x, c->mov.y, dx, dy, c->name);
   SDL_Rect charRect = { c->pos.x + dx, c->pos.y + dy, c->img.sfc->w, c->img.sfc->h };
-  //if (phase==0) printf(" RECT: (%d,%d,%d,%d)\n", charRect.x, charRect.y, charRect.w, charRect.h);
-  if (phase==0) PRINT_IN_DRAW_TEXTURE=1;
   DrawTexture(screenRect, c->img.tex, &charRect);
-  PRINT_IN_DRAW_TEXTURE=0;
 }
 
 void DrawPlayer(SDL_Rect* screenRect, int phase)
@@ -312,8 +343,7 @@ int MainLoop()
          nextSecond = 0,
          logicFrameDurationMs = 1000 / LOGIC_FRAMES_PER_SEC,
          logicFramesCount = 0,
-         renderFramesPerSecond = RENDER_FRAMES_PER_SEC > 0 ? RENDER_FRAMES_PER_SEC : 1000,
-         renderFrameDurationMs = 1000 / renderFramesPerSecond,
+         renderFrameDurationMs = frameRateCap > 0 ? 1000 / frameRateCap : 0,
          renderFramesCount = 0;
   while (!quitting)
   {
@@ -336,18 +366,26 @@ int MainLoop()
       UpdateLogic();
     }
     int draw = 0;
-    while (nextRenderFrame < time)
+    if (frameRateCap == 0)
     {
-      nextRenderFrame += renderFrameDurationMs;
       ++renderFramesCount;
       draw = 1;
+    }
+    else
+    {
+      while (nextRenderFrame < time)
+      {
+        nextRenderFrame += renderFrameDurationMs;
+        ++renderFramesCount;
+        draw = 1;
+      }
     }
     if (draw)
     {
       int phase = PHASE_GRAIN - (nextLogicFrameTime - time) * PHASE_GRAIN / logicFrameDurationMs;
       assert(phase >= 0);
       assert(phase <= PHASE_GRAIN);
-      printf("PHASE: %d\n", phase);
+      //printf("PHASE: %d\n", phase);
       Draw(phase);
     }
   }
