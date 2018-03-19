@@ -13,7 +13,22 @@ namespace Generator
 
         public TiledExporter() { }
 
-        public void Export(string tiledMapFilename, string destBaseFilename)
+    }
+
+    public class TiledMap
+    {
+        public const int IMAGE_FILENAME_LENGTH_LIMIT = 20;
+
+        public int Width { get; private set; }
+        public int Height { get; private set; }
+        public int TileWidth { get; private set; }
+        public int TileHeight { get; private set; }
+        public IList<TiledTileset> Tilesets { get; private set; }
+        public IList<TiledLayer> Layers { get; private set; }
+
+        private TiledMap() { }
+
+        public static TiledMap Parse(string tiledMapFilename)
         {
             var tilemapDoc = new XmlDocument();
             tilemapDoc.Load(tiledMapFilename);
@@ -29,9 +44,59 @@ namespace Generator
             var tilesets = MapElements(tilesetElements, e => TiledTileset.Parse(e, tileWidth, tileHeight));
             var layerElements = mapElt.SelectNodes("layer");
             var layers = MapElements(layerElements, e => TiledLayer.Parse(e, width, height));
+            var objectGroupElements = mapElt.SelectNodes("objectgroup");
+            var objectGroups = MapElements(objectGroupElements, e => TiledObjectGroup.Parse(e, tileWidth, tileHeight));
+            return new TiledMap()
+            {
+                Width = width,
+                Height = height,
+                TileWidth = tileWidth,
+                TileHeight = tileHeight,
+                Tilesets = tilesets.ToList(),
+                Layers = layers.ToList(),
+            };
         }
 
-        class TiledTileset
+        public void Save(string filename)
+        {
+            foreach (var ts in Tilesets)
+            {
+                if (ts.ImageFilename.Length > IMAGE_FILENAME_LENGTH_LIMIT)
+                    throw new InvalidDataException(
+                        $"Image filename more than {IMAGE_FILENAME_LENGTH_LIMIT} characters: {ts.ImageFilename}");
+            }
+            using (var w = new FileStream(filename, FileMode.Open, FileAccess.Read))
+            {
+                using (var bw = new PortableBinaryWriter(w))
+                {
+                    bw.Write(Width);
+                    bw.Write(Height);
+                    bw.Write(TileWidth);
+                    bw.Write(TileHeight);
+                    bw.Write(Tilesets.Count());
+                    bw.Write(Layers.Count());
+                    foreach (var ts in Tilesets)
+                    {
+                        bw.Write(ts.FirstGid);
+                        bw.Write(ts.ImageWidth);
+                        bw.Write(ts.ImageHeight);
+                        bw.Write(ts.TileCount);
+                        bw.Write(ts.Columns);
+                        bw.Write(ts.ImageFilename);
+                        for (int i = ts.ImageFilename.Length; i < IMAGE_FILENAME_LENGTH_LIMIT; ++i)
+                            bw.Write('\0');
+                    }
+                    foreach (var layer in Layers)
+                    {
+                        for (int r = 0; r < Height; ++r)
+                            for (int c = 0; c < Width; ++c)
+                                bw.Write(layer.Cells[r][c]);
+                    }
+                }
+            }
+        }
+
+        public class TiledTileset
         {
             public int FirstGid { get; private set; }
             public string TilesetFilename { get; private set; }
@@ -93,7 +158,7 @@ namespace Generator
         <image source="sharm-tiny-16-basic-basictiles32.png" width="256" height="480"/>
          */
 
-        class TiledLayer
+        public class TiledLayer
         {
             public string Name { get; private set; }
             public int[][] Cells { get; private set; }
@@ -130,14 +195,66 @@ namespace Generator
                     for (int c = 0; c < cols; ++c)
                         WriteIntBigEndian(w, Cells[r][c]);
             }
-            private void WriteIntBigEndian(BinaryWriter writer, int intToWrite)
+        }
+
+        public class TiledObjectGroup
+        {
+            public string Name { get; private set; }
+            public IList<TiledObject> Objects { get; private set; }
+            private TiledObjectGroup() { }
+            internal static TiledObjectGroup Parse(XmlElement objGrpElt, int tileWidth, int tileHeight)
             {
-                byte[] bytes = BitConverter.GetBytes(intToWrite);
-                if (BitConverter.IsLittleEndian)
-                    bytes = bytes.Reverse().ToArray();
-                writer.Write(bytes);
+                string name = GetStrAttribute(objGrpElt, "name");
+                var objectElements = objGrpElt.SelectNodes("object");
+                var objects = MapElements(objectElements, e => TiledObject.Parse(e, tileWidth, tileHeight));
+                return new TiledObjectGroup() { Name = name, Objects = objects.ToList(), };
             }
         }
+
+        public class TiledObject
+        {
+            public int Id { get; private set; }
+            public string Name { get; private set; }
+            public int Gid { get; private set; }
+            public int X { get; private set; }
+            public int Y { get; private set; }
+            public Dictionary<string, string> Properties { get; private set; }
+            private TiledObject() { }
+            public static TiledObject Parse(XmlElement objElt, int tileWidth, int tileHeight)
+            {
+                int id = GetIntAttribute(objElt, "id");
+                string name = GetStrAttribute(objElt, "name");
+                int gid = GetIntAttribute(objElt, "id");
+                int x = GetIntAttribute(objElt, "x") / tileWidth;
+                int y = GetIntAttribute(objElt, "y") / tileHeight;
+                RequireAttributeValue(objElt, "width", tileWidth.ToString());
+                RequireAttributeValue(objElt, "height", tileHeight.ToString());
+                var properties = new Dictionary<string, string>();
+                var propertyElements = objElt.SelectNodes("properties/property");
+                foreach (XmlElement propElt in propertyElements)
+                {
+                    string propName = GetStrAttribute(propElt, "name");
+                    string propValue = GetStrAttribute(propElt, "value");
+                    properties.Add(propName, propValue);
+                }
+                return new TiledObject()
+                {
+                    Id = id,
+                    Name = name,
+                    Gid = gid,
+                    X = x,
+                    Y = y,
+                    Properties = properties,
+                };
+            }
+        }
+
+        /*
+          <object id = "1" name="Pot1" gid="28" x="1920" y="1120" width="32" height="32">
+            <properties>
+              <property name = "Script" value="KillPlayer()"/>
+            </properties>
+        */
 
         private static IEnumerable<Tout> MapElements<Tout>(XmlNodeList elements, Func<XmlElement, Tout> function)
         {
@@ -166,13 +283,21 @@ namespace Generator
             return ParseInt(elt.Attributes[attrName].Value);
         }
 
-        public static int ParseInt(string s)
+        private static int ParseInt(string s)
         {
             int i;
             Int32.Parse(s);
             if (!Int32.TryParse(s, out i))
                 throw new FormatException("Invalid integer: '" + s + "'");
             return i;
+        }
+
+        private static void WriteIntBigEndian(BinaryWriter writer, int intToWrite)
+        {
+            byte[] bytes = BitConverter.GetBytes(intToWrite);
+            if (BitConverter.IsLittleEndian)
+                bytes = bytes.Reverse().ToArray();
+            writer.Write(bytes);
         }
 
     }
