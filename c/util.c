@@ -51,8 +51,10 @@ void* MallocOrDie(size_t size)
   return mem;
 }
 
-struct TextFile* ReadTextFile(const char* filename)
+int ReadBinFile(const char* filename, char** filePtr, long* fileLen)
 {
+  *filePtr = 0;
+  *fileLen = 0;
   FILE* f = fopen(filename, "rb");
   if (!f)
   {
@@ -75,6 +77,16 @@ struct TextFile* ReadTextFile(const char* filename)
     }
   }
   fclose(f);
+  *filePtr = buf;
+  *fileLen = len;
+  return 1;
+}
+
+struct TextFile* ReadTextFile(const char* filename)
+{
+  char* buf;
+  long len;
+  if (!ReadBinFile(filename, &buf, &len)) return 0;
   int nLines = 0;
   for (int i = 0; i < len; ++i)
     if (buf[i] == '\n')

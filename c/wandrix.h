@@ -45,6 +45,7 @@ SDL_Rect CharBase_GetRect(struct CharBase* c);
 struct Size CharBase_GetSize(struct CharBase* c);
 const char* Rect_ToString(SDL_Rect* r, char* buf);
 
+int ReadBinFile(const char* filename, char** filePtr, int* fileLen);
 struct TextFile* ReadTextFile(const char* filename);
 void FreeTextFile(struct TextFile* lines);
 struct IntGrid* ReadGridFile(const char* filename, int nRows, int nCols);

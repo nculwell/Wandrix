@@ -31,6 +31,14 @@ struct Size maxTextureSize;
 struct Size mapImageSize;
 int quitting = 0;
 
+typedef struct Tile {
+} Tile;
+
+typedef struct TileMap {
+  int rows, cols;
+  Tile* tiles;
+} TileMap;
+
 struct Player player = {
   { .name = "Player", .img = { .path = "testimg/y32.png" }, .pos = {0,0}, }
 };
