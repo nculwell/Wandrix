@@ -8,17 +8,13 @@ using System.IO;
 
 namespace Generator
 {
-    class TiledExporter
-    {
-
-        public TiledExporter() { }
-
-    }
 
     public class TiledMap
     {
         public const int FILENAME_LENGTH_LIMIT = 28;
 
+        public string MapFilename { get; private set; }
+        public string MapFilenameNewExt { get { return Path.ChangeExtension(MapFilename, ".wtm"); } }
         public int Width { get; private set; }
         public int Height { get; private set; }
         public int TileWidth { get; private set; }
@@ -48,6 +44,7 @@ namespace Generator
             var objectGroups = MapElements(objectGroupElements, e => TiledObjectGroup.Parse(e, tileWidth, tileHeight));
             return new TiledMap()
             {
+                MapFilename = tiledMapFilename,
                 Width = width,
                 Height = height,
                 TileWidth = tileWidth,
@@ -66,7 +63,7 @@ namespace Generator
                         $"Image filename more than {FILENAME_LENGTH_LIMIT} characters: {ts.ImageFilename}");
             }
             CheckCellValueLimit();
-            using (var w = new PortableBinaryWriter(filename))
+            using (var w = new PortableBinaryWriter(MapFilenameNewExt))
             {
                 w.Write(Width);
                 w.Write(Height);
@@ -118,10 +115,7 @@ namespace Generator
         {
             public int FirstGid { get; private set; }
             public string TilesetFilename { get; private set; }
-            public string TilesetFilenameNewExt
-            {
-                get { return Path.ChangeExtension(TilesetFilename, ".wts"); }
-            }
+            public string TilesetFilenameNewExt { get { return Path.ChangeExtension(TilesetFilename, ".wts"); } }
             public string ImageFilename { get; private set; }
             public int ImageWidth { get; private set; }
             public int ImageHeight { get; private set; }
@@ -138,6 +132,7 @@ namespace Generator
             }
             private static TiledTileset ParseDoc(string source, int firstGid, int expectedTileWidth, int expectedTileHeight)
             {
+                // TODO: Tile properties.
                 var tilesetDoc = new XmlDocument();
                 tilesetDoc.Load(source);
                 var tilesetRoot = tilesetDoc.DocumentElement;
@@ -196,13 +191,16 @@ namespace Generator
                 RequireAttributeValue(dataElement, "encoding", "csv");
                 string data = dataElement.InnerText.Trim().Replace("\r", "");
                 var dataLines = data.Split('\n');
-                var dataCells = dataLines
-                    .Select(x =>
-                        x.Split(',')
-                        .Select(Int32.Parse)
-                        .ToArray())
-                    .ToArray();
-                return new TiledLayer() { Name = name, Cells = dataCells, };
+                var dataCellsStr = dataLines.Select(x => x.Split(','));
+                var dataCells = new List<int[]>();
+                foreach (var line in dataLines)
+                {
+                    Console.WriteLine(line);
+                    var pieces = line.Split(',', StringSplitOptions.RemoveEmptyEntries);
+                    var numbers = pieces.Select(x => Int32.Parse(x)).ToArray();
+                    dataCells.Add(numbers);
+                }
+                return new TiledLayer() { Name = name, Cells = dataCells.ToArray(), };
             }
             public void SaveText(TextWriter w)
             {
@@ -270,13 +268,6 @@ namespace Generator
                 };
             }
         }
-
-        /*
-          <object id = "1" name="Pot1" gid="28" x="1920" y="1120" width="32" height="32">
-            <properties>
-              <property name = "Script" value="KillPlayer()"/>
-            </properties>
-        */
 
         private static IEnumerable<Tout> MapElements<Tout>(XmlNodeList elements, Func<XmlElement, Tout> function)
         {

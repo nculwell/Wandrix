@@ -113,6 +113,8 @@ int Init()
   center.x = screen->w / 2;
   center.y = screen->h / 2;
   atexit(AtExitHandler);
+  TiledMap* teMap = TiledLoadMap("map.wtm");
+  if (!teMap) return 0;
   return 1;
 }
 
@@ -120,7 +122,7 @@ int LoadNpcs()
 {
   for (int i=0; i < NPC_COUNT; ++i)
   {
-    if (npcs[i].c.img.path[0])
+    if (npcs[i].c.img.path)
     {
       npcs[i].id = i;
       if (!LoadImage(&npcs[i].c.img, 1))

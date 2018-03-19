@@ -44,27 +44,6 @@ typedef struct TiledTilesetInput {
   Sint32 imageWidth, imageHeight, tileCount, columns, imageFilenameLength;
 } TiledTilesetInput;
 
-typedef struct TiledTileset {
-  Sint32 tileCount, columns;
-  struct Image image;
-  char* sourceFilename;
-} TiledTileset;
-
-typedef struct TiledTilesetRef {
-  Sint32 firstGid;
-  TiledTileset* tileset;
-} TiledTilesetRef;
-
-typedef struct TiledLayer {
-  Sint16 cells[0];
-} TiledLayer;
-
-typedef struct TiledMap {
-  Sint32 width, height, tileWidth, tileHeight, nTilesets, nLayers;
-  TiledTilesetRef* tilesetRefs;
-  TiledLayer* layers;
-} TiledMap;
-
 #define MAX_LOADED_TILESETS 16
 static int nLoadedTilesets = 0;
 static TiledTileset loadedTilesets[MAX_LOADED_TILESETS];
@@ -106,15 +85,13 @@ static void LoadTilesetRef(SDL_RWops* rw, TiledTilesetRef* tilesetRef)
   ReadInts32(rw, (Sint32*)tilesetRef, 1);
   Sint32 filenameLength;
   ReadInts32(rw, (Sint32*)&filenameLength, 1);
+  assert(filenameLength > 0); // defend against rogue input
   assert(filenameLength < MAX_INPUT_LENGTH); // defend against rogue input
   char filename[filenameLength + 1];
   RWread(rw, filename, 1, filenameLength);
   filename[filenameLength] = '\0';
+  printf("TS filename length: %I64d/%d\n", strlen(filename), filenameLength);
   tilesetRef->tileset = LoadTileset(filename);
-}
-
-static void LoadLayer(SDL_RWops* rw, TiledLayer* layer)
-{
 }
 
 TiledMap* TiledLoadMap(const char* filename)
@@ -124,12 +101,18 @@ TiledMap* TiledLoadMap(const char* filename)
   if (!rw) return 0;
   TiledMap* map = MallocOrDie(sizeof(TiledMap));
   ReadInts32(rw, (Sint32*)map, 6);
+  printf("Read values: w=%d, h=%d,"
+      " tw=%d, th=%d, nt=%d, nl=%d\n",
+      map->width, map->height,
+      map->tileWidth, map->tileHeight, map->nTilesets, map->nLayers);
   map->tilesetRefs = (TiledTilesetRef*)MallocOrDie(map->nTilesets * sizeof(TiledTilesetRef));
-  map->layers = (TiledLayer*)MallocOrDie(map->nLayers * sizeof(TiledLayer));
   for (int i=0; i < map->nTilesets; ++i)
     LoadTilesetRef(rw, &map->tilesetRefs[i]);
-  for (int i=0; i < map->nLayers; ++i)
-    LoadLayer(rw, &map->layers[i]);
+  size_t singleLayerCellCount = map->width * map->height;
+  size_t totalCellCount = map->nLayers * singleLayerCellCount;
+  map->layers = (TiledLayer*)MallocOrDie(totalCellCount * sizeof(Sint16));
+  int ok = ReadInts16(rw, map->layers->cells, totalCellCount);
+  assert(ok);
   return map;
 }
 

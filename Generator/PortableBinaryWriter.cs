@@ -10,9 +10,11 @@ namespace Generator
     public class PortableBinaryWriter : BinaryWriter
     {
         /// <summary> Open file 'path' for writing. </summary>
-        public PortableBinaryWriter(string path) : base(new FileStream(path, FileMode.Open, FileAccess.Write)) { }
+        public PortableBinaryWriter(string path)
+            : base(new FileStream(path, FileMode.OpenOrCreate, FileAccess.Write), Encoding.ASCII) { }
         /// <summary> Use stream for writing. </summary>
-        public PortableBinaryWriter(Stream output) : base(output) { }
+        public PortableBinaryWriter(Stream output)
+            : base(output, Encoding.ASCII) { }
         /// <summary> Write 64-bit unsigned int in big-endian order. </summary>
         public override void Write(ulong value) { WriteBigEndian(BitConverter.GetBytes(value)); }
         /// <summary> Write 32-bit unsigned int in big-endian order. </summary>
@@ -38,9 +40,11 @@ namespace Generator
             if (str.Length > fixedLength)
                 throw new ArgumentException($"String length ({str.Length}) exceeds fixed length ({fixedLength}).");
             Write(fixedLength);
-            Write(str);
+            var encoded = Encoding.ASCII.GetBytes(str);
+            Write(encoded);
             for (int i = str.Length; i < fixedLength; ++i)
                 Write('\0');
+            Console.WriteLine("String written.");
         }
     }
 
