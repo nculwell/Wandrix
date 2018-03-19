@@ -17,7 +17,7 @@ namespace Generator
 
     public class TiledMap
     {
-        public const int IMAGE_FILENAME_LENGTH_LIMIT = 20;
+        public const int FILENAME_LENGTH_LIMIT = 28;
 
         public int Width { get; private set; }
         public int Height { get; private set; }
@@ -61,45 +61,67 @@ namespace Generator
         {
             foreach (var ts in Tilesets)
             {
-                if (ts.ImageFilename.Length > IMAGE_FILENAME_LENGTH_LIMIT)
+                if (ts.ImageFilename.Length > FILENAME_LENGTH_LIMIT)
                     throw new InvalidDataException(
-                        $"Image filename more than {IMAGE_FILENAME_LENGTH_LIMIT} characters: {ts.ImageFilename}");
+                        $"Image filename more than {FILENAME_LENGTH_LIMIT} characters: {ts.ImageFilename}");
             }
-            using (var w = new FileStream(filename, FileMode.Open, FileAccess.Read))
+            CheckCellValueLimit();
+            using (var w = new PortableBinaryWriter(filename))
             {
-                using (var bw = new PortableBinaryWriter(w))
+                w.Write(Width);
+                w.Write(Height);
+                w.Write(TileWidth);
+                w.Write(TileHeight);
+                w.Write(Tilesets.Count());
+                w.Write(Layers.Count());
+                foreach (var ts in Tilesets)
                 {
-                    bw.Write(Width);
-                    bw.Write(Height);
-                    bw.Write(TileWidth);
-                    bw.Write(TileHeight);
-                    bw.Write(Tilesets.Count());
-                    bw.Write(Layers.Count());
-                    foreach (var ts in Tilesets)
-                    {
-                        bw.Write(ts.FirstGid);
-                        bw.Write(ts.ImageWidth);
-                        bw.Write(ts.ImageHeight);
-                        bw.Write(ts.TileCount);
-                        bw.Write(ts.Columns);
-                        bw.Write(ts.ImageFilename);
-                        for (int i = ts.ImageFilename.Length; i < IMAGE_FILENAME_LENGTH_LIMIT; ++i)
-                            bw.Write('\0');
-                    }
-                    foreach (var layer in Layers)
-                    {
-                        for (int r = 0; r < Height; ++r)
-                            for (int c = 0; c < Width; ++c)
-                                bw.Write(layer.Cells[r][c]);
-                    }
+                    w.Write(ts.FirstGid);
+                    w.Write(FILENAME_LENGTH_LIMIT, ts.TilesetFilenameNewExt);
+                }
+                foreach (var layer in Layers)
+                {
+                    for (int r = 0; r < Height; ++r)
+                        for (int c = 0; c < Width; ++c)
+                            w.Write((short)layer.Cells[r][c]);
                 }
             }
+            foreach (var ts in Tilesets)
+            {
+                using (var w = new PortableBinaryWriter(ts.TilesetFilenameNewExt))
+                {
+                    w.Write(ts.ImageWidth);
+                    w.Write(ts.ImageHeight);
+                    w.Write(ts.TileCount);
+                    w.Write(ts.Columns);
+                    w.Write(FILENAME_LENGTH_LIMIT, ts.ImageFilename);
+                }
+            }
+        }
+
+        private int CheckCellValueLimit()
+        {
+            int[] cellValueLimits = new int[] { SByte.MaxValue, Int16.MaxValue, Int32.MaxValue };
+            int cellValueLimitIndex = 0;
+            foreach (var layer in Layers)
+            {
+                for (int r = 0; r < Height; ++r)
+                    for (int c = 0; c < Width; ++c)
+                        if (layer.Cells[r][c] > Int16.MaxValue)
+                            throw new InvalidDataException(
+                                $"Cell value too large: {layer.Cells[r][c]} > {Int16.MaxValue}");
+            }
+            return cellValueLimits[cellValueLimitIndex];
         }
 
         public class TiledTileset
         {
             public int FirstGid { get; private set; }
             public string TilesetFilename { get; private set; }
+            public string TilesetFilenameNewExt
+            {
+                get { return Path.ChangeExtension(TilesetFilename, ".wts"); }
+            }
             public string ImageFilename { get; private set; }
             public int ImageWidth { get; private set; }
             public int ImageHeight { get; private set; }

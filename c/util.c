@@ -2,6 +2,10 @@
 */
 
 #include "wandrix.h"
+#include <SDL_image.h>
+
+extern SDL_Renderer* renderer;
+extern SDL_Surface* screen;
 
 struct Coords Coords_Scale(int scalar, struct Coords s)
 {
@@ -188,5 +192,46 @@ Sint16 ParseInt16(const char* str)
     return SDL_MIN_SINT16;
   }
   return (Sint16)n;
+}
+
+int LoadImage(struct Image* img, int createTexture)
+{
+  assert(img);
+  assert(img->path);
+  SDL_Surface* loadedSurface = IMG_Load(img->path);
+  if (!loadedSurface)
+  {
+    fprintf(stderr, "Unable to load image '%s': %s\n", img->path, IMG_GetError());
+    return 0;
+  }
+  img->sfc = SDL_ConvertSurface(loadedSurface, screen->format, 0);
+  SDL_FreeSurface(loadedSurface);
+  if (!img->sfc)
+  {
+    fprintf(stderr, "Unable to optimize image '%s': %s\n", img->path, SDL_GetError());
+    return 0;
+  }
+  if (createTexture)
+  {
+    img->tex = SDL_CreateTextureFromSurface(renderer, img->sfc);
+    if (!img->tex)
+    {
+      fprintf(stderr, "Unable to create texture for image '%s': %s\n", img->path, SDL_GetError());
+      return 0;
+    }
+  }
+  return 1;
+}
+
+int InitImage()
+{
+  int imgFlags = IMG_INIT_PNG;
+  int imgInitResult = IMG_Init(imgFlags) & imgFlags;
+  if(!imgInitResult)
+  {
+    fprintf(stderr, "SDL_image init failed: %s\n", IMG_GetError() );
+    return 0;
+  }
+  return 1;
 }
 

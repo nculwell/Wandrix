@@ -2,7 +2,6 @@
 */
 
 #include "wandrix.h"
-#include <SDL_image.h>
 #define PHASE_GRAIN 10000
 
 const char* WINDOW_NAME = "Wandrix";
@@ -32,6 +31,7 @@ struct Size mapImageSize;
 int quitting = 0;
 
 typedef struct Tile {
+
 } Tile;
 
 typedef struct TileMap {
@@ -65,13 +65,7 @@ int Init()
     fprintf(stderr, "SDL init failed: %s\n", SDL_GetError());
     return 0;
   }
-  int imgFlags = IMG_INIT_PNG;
-  int imgInitResult = IMG_Init(imgFlags) & imgFlags;
-  if(!imgInitResult)
-  {
-    fprintf(stderr, "SDL_image init failed: %s\n", IMG_GetError() );
-    return 0;
-  }
+  if (!InitImage()) return 0;
   Uint32 windowFlags = (FULLSCREEN * SDL_WINDOW_FULLSCREEN_DESKTOP);
   int wPos = SDL_WINDOWPOS_CENTERED;
   window = SDL_CreateWindow(WINDOW_NAME, wPos, wPos, SCREEN_W, SCREEN_H, windowFlags);
@@ -119,35 +113,6 @@ int Init()
   center.x = screen->w / 2;
   center.y = screen->h / 2;
   atexit(AtExitHandler);
-  return 1;
-}
-
-int LoadImage(struct Image* img, int createTexture)
-{
-  assert(img);
-  assert(img->path);
-  SDL_Surface* loadedSurface = IMG_Load(img->path);
-  if (!loadedSurface)
-  {
-    fprintf(stderr, "Unable to load image '%s': %s\n", img->path, IMG_GetError());
-    return 0;
-  }
-  img->sfc = SDL_ConvertSurface(loadedSurface, screen->format, 0);
-  SDL_FreeSurface(loadedSurface);
-  if (!img->sfc)
-  {
-    fprintf(stderr, "Unable to optimize image '%s': %s\n", img->path, SDL_GetError());
-    return 0;
-  }
-  if (createTexture)
-  {
-    img->tex = SDL_CreateTextureFromSurface(renderer, img->sfc);
-    if (!img->tex)
-    {
-      fprintf(stderr, "Unable to create texture for image '%s': %s\n", img->path, SDL_GetError());
-      return 0;
-    }
-  }
   return 1;
 }
 

@@ -7,12 +7,10 @@
 #include <assert.h>
 #include <limits.h>
 
-#define FILENAME_BUFSIZE 32
-
 struct Coords { int x, y; };
 struct Size { int w, h; };
 struct Image { 
-  const char path[FILENAME_BUFSIZE]; SDL_Surface* sfc; SDL_Texture* tex;
+  const char* path; SDL_Surface* sfc; SDL_Texture* tex;
 };
 struct CharBase {
   const char* name; struct Image img; struct Coords pos, mov; int hpCur, hpMax;
@@ -45,7 +43,8 @@ SDL_Rect CharBase_GetRect(struct CharBase* c);
 struct Size CharBase_GetSize(struct CharBase* c);
 const char* Rect_ToString(SDL_Rect* r, char* buf);
 
-int ReadBinFile(const char* filename, char** filePtr, int* fileLen);
+void* MallocOrDie(size_t size);
+int ReadBinFile(const char* filename, char** filePtr, long* fileLen);
 struct TextFile* ReadTextFile(const char* filename);
 void FreeTextFile(struct TextFile* lines);
 struct IntGrid* ReadGridFile(const char* filename, int nRows, int nCols);
@@ -53,4 +52,7 @@ void FreeIntGrid(struct IntGrid* grid);
 
 Sint32 ParseInt32(const char* str);
 Sint16 ParseInt16(const char* str);
+
+int LoadImage(struct Image* img, int createTexture);
+int InitImage();
 
