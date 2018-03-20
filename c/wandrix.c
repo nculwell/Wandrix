@@ -259,7 +259,7 @@ static void ComputeVisibleCoords(int* resultFirstVisible, int* resultNVisible,
   if (firstVisible * tileSize > intersectEdge)
     --firstVisible;
   int nVisible = intersectSize / tileSize;
-  if ((firstVisible + nVisible) * tileSize < intersectEdge + intersectSize)
+  while ((firstVisible + nVisible) * tileSize < intersectEdge + intersectSize)
     ++nVisible;
   *resultFirstVisible = firstVisible;
   *resultNVisible = nVisible;
@@ -281,16 +281,20 @@ void TiledMap_Draw(TiledMap* map, SDL_Rect* screenRect)
   // TODO: Only iterate over visible tiles.
   SDL_Rect tileRect = { 0, 0,  map->tileWidth, map->tileHeight };
   //TiledTile* tile = &map->layers->tiles[0];
-  int r = firstVisibleRow;
-  tileRect.y = r * map->tileHeight;
-  for (;
+  int nTilesInRow = map->nLayers * map->width;
+  int firstTileOffset = nTilesInRow * firstVisibleRow + map->nLayers * firstVisibleCol;
+  printf("nTilesInRow=%d, firstTileOffset=%d\n", nTilesInRow, firstTileOffset);
+  TiledTile** nextRowFirstTile = map->layerTiles + firstTileOffset;
+  int firstTileX = firstVisibleCol * map->tileWidth;
+  tileRect.y = firstVisibleRow * map->tileHeight;
+  for (int r = firstVisibleRow;
       r < firstVisibleRow + nVisibleRows;
       ++r, tileRect.y += map->tileHeight)
   {
-    int c = firstVisibleCol;
-    tileRect.x = c * map->tileWidth;
-    TiledTile** tile = map->layerTiles + map->nLayers * (r * map->width + c);
-    for (;
+    TiledTile** tile = nextRowFirstTile;
+    nextRowFirstTile += nTilesInRow;
+    tileRect.x = firstTileX;
+    for (int c = firstVisibleCol;
         c < firstVisibleCol + nVisibleCols;
         ++c, tileRect.x += map->tileWidth)
     {
@@ -298,9 +302,6 @@ void TiledMap_Draw(TiledMap* map, SDL_Rect* screenRect)
       {
         if (*tile)
         {
-          //printf("Tile: "); fflush(stdout);
-          //printf("X: %d", tile->x); fflush(stdout);
-          //printf("Y: %d\n", tile->y); fflush(stdout);
           DrawTextureWithOffset(screenRect,
               (*tile)->tex, &tileRect, (*tile)->x, (*tile)->y);
         }
