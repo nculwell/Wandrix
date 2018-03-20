@@ -413,7 +413,7 @@ int MainLoop()
   return 1;
 }
 
-int main(int argc, char** argv)
+int WandrixMain(int argc, char** argv)
 {
   printf("STARTED\n");
   int success = Init() && LoadAssets() && MainLoop();
