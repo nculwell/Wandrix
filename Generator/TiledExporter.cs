@@ -76,12 +76,10 @@ namespace Generator
                     w.Write(ts.FirstGid);
                     w.Write(FILENAME_LENGTH_LIMIT, ts.TilesetFilenameNewExt);
                 }
-                foreach (var layer in Layers)
-                {
-                    for (int r = 0; r < Height; ++r)
-                        for (int c = 0; c < Width; ++c)
+                for (int r = 0; r < Height; ++r)
+                    for (int c = 0; c < Width; ++c)
+                        foreach (var layer in Layers)
                             w.Write((short)layer.Cells[r][c]);
-                }
             }
             foreach (var ts in Tilesets)
             {

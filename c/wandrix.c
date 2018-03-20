@@ -220,8 +220,6 @@ void UpdateLogic()
   keypresses = 0;
 }
 
-int PRINT_IN_DRAW_TEXTURE = 0;
-
 int DrawTextureWithOffset(SDL_Rect* screenRect, SDL_Texture* texture,
     SDL_Rect* textureRect, int textureOffsetX, int textureOffsetY)
 {
@@ -254,28 +252,52 @@ int DrawTexture(SDL_Rect* screenRect, SDL_Texture* texture, SDL_Rect* textureRec
   return DrawTextureWithOffset(screenRect, texture, textureRect, 0, 0);
 }
 
+static void ComputeVisibleCoords(int* resultFirstVisible, int* resultNVisible,
+    int nTiles, int tileSize, int intersectEdge, int intersectSize)
+{
+  int firstVisible = intersectEdge / tileSize;
+  if (firstVisible * tileSize > intersectEdge)
+    --firstVisible;
+  int nVisible = intersectSize / tileSize;
+  if ((firstVisible + nVisible) * tileSize < intersectEdge + intersectSize)
+    ++nVisible;
+  *resultFirstVisible = firstVisible;
+  *resultNVisible = nVisible;
+}
+
 void TiledMap_Draw(TiledMap* map, SDL_Rect* screenRect)
 {
-  //SDL_Rect wholeMapRect = { 0, 0,
-  //  map->width * map->tileWidth, map->height * map->tileHeight };
+  int mapWidthPixels = map->width * map->tileWidth;
+  int mapHeightPixels = map->height * map->tileHeight;
+  SDL_Rect wholeMapRect = { 0, 0, mapWidthPixels, mapHeightPixels };
+  SDL_Rect intersectRect;
+  if (SDL_TRUE != SDL_IntersectRect(screenRect, &wholeMapRect, &intersectRect))
+    return;
+  int firstVisibleRow, nVisibleRows, firstVisibleCol, nVisibleCols;
+  ComputeVisibleCoords(&firstVisibleRow, &nVisibleRows,
+      map->height, map->tileHeight, intersectRect.y, intersectRect.h);
+  ComputeVisibleCoords(&firstVisibleCol, &nVisibleCols,
+      map->width, map->tileWidth, intersectRect.x, intersectRect.w);
   // TODO: Only iterate over visible tiles.
   SDL_Rect tileRect = { 0, 0,  map->tileWidth, map->tileHeight };
   //TiledTile* tile = &map->layers->tiles[0];
-  int t=0;
-  TiledTile** tile = map->layerTiles;
-  for (int lyr=0; lyr < map->nLayers; ++lyr)
+  int r = firstVisibleRow;
+  tileRect.y = r * map->tileHeight;
+  for (;
+      r < firstVisibleRow + nVisibleRows;
+      ++r, tileRect.y += map->tileHeight)
   {
-    for (int r=0; r < map->height; ++r)
+    int c = firstVisibleCol;
+    tileRect.x = c * map->tileWidth;
+    TiledTile** tile = map->layerTiles + map->nLayers * (r * map->width + c);
+    for (;
+        c < firstVisibleCol + nVisibleCols;
+        ++c, tileRect.x += map->tileWidth)
     {
-      for (int c=0; c < map->width; ++c)
+      for (int layer=0; layer < map->nLayers; ++layer)
       {
-        //TiledTile* tile = map->layerTiles[t];
-        //printf("%d %p\n", t, tile);fflush(stdout);
-        //printf("X");fflush(stdout);
         if (*tile)
         {
-          tileRect.x = c * map->tileWidth;
-          tileRect.y = r * map->tileHeight;
           //printf("Tile: "); fflush(stdout);
           //printf("X: %d", tile->x); fflush(stdout);
           //printf("Y: %d\n", tile->y); fflush(stdout);
@@ -283,7 +305,6 @@ void TiledMap_Draw(TiledMap* map, SDL_Rect* screenRect)
               (*tile)->tex, &tileRect, (*tile)->x, (*tile)->y);
         }
         ++tile;
-        ++t;
       }
     }
   }
