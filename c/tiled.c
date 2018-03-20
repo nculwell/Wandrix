@@ -48,7 +48,7 @@ typedef struct TiledTilesetInput {
 static int nLoadedTilesets = 0;
 static TiledTileset loadedTilesets[MAX_LOADED_TILESETS];
 
-static TiledTileset* LoadTileset(const char* filename)
+static TiledTileset* LoadTileset(const char* filename, int tileWidth, int tileHeight)
 {
   // Search for this tileset among those already loaded.
   for (int i=0; i < nLoadedTilesets; ++i)
@@ -68,6 +68,8 @@ static TiledTileset* LoadTileset(const char* filename)
   ++nLoadedTilesets;
   TiledTilesetInput input;
   ReadInts32(rw, (Sint32*)&input, 5);
+  tileset->tileCount = input.tileCount;
+  tileset->columns = input.columns;
   char* filenameCopy = MallocOrDie(strlen(filename) + 1);
   strcpy(filenameCopy, filename);
   char imageFilename[input.imageFilenameLength + 1];
@@ -77,10 +79,31 @@ static TiledTileset* LoadTileset(const char* filename)
   strcpy(imagePath, imageFilename);
   tileset->image.path = imagePath;
   if (!LoadImage(&tileset->image, 1)) return 0;
+  tileset->tiles = MallocOrDie(input.tileCount * sizeof(TiledTile));
+  int column=0, x=0, y=0;
+  for (int t=0; t < input.tileCount; ++t)
+  {
+    TiledTile* tile = &tileset->tiles[t];
+    tile->x = x;
+    tile->y = y;
+    tile->tex = tileset->image.tex;
+    ++column;
+    if (column == tileset->columns)
+    {
+      column = 0;
+      x = 0;
+      y += tileHeight;
+    }
+    else
+    {
+      x += tileWidth;
+    }
+  }
   return tileset;
 }
 
-static void LoadTilesetRef(SDL_RWops* rw, TiledTilesetRef* tilesetRef)
+static void LoadTilesetRef(SDL_RWops* rw, TiledTilesetRef* tilesetRef,
+    Sint32 tileWidth, Sint32 tileHeight)
 {
   ReadInts32(rw, (Sint32*)tilesetRef, 1);
   Sint32 filenameLength;
@@ -91,12 +114,31 @@ static void LoadTilesetRef(SDL_RWops* rw, TiledTilesetRef* tilesetRef)
   RWread(rw, filename, 1, filenameLength);
   filename[filenameLength] = '\0';
   printf("TS filename length: %I64d/%d\n", strlen(filename), filenameLength);
-  tilesetRef->tileset = LoadTileset(filename);
+  tilesetRef->tileset = LoadTileset(filename, tileWidth, tileHeight);
 }
 
-TiledMap* TiledLoadMap(const char* filename)
+static TiledTile* TiledMap_FindTile(TiledMap* map, Sint16 gid)
 {
-  assert(sizeof(TiledMap) == 6 * sizeof(Sint32) + 2 * sizeof(TiledLayer*));
+  if (gid == 0)
+    return 0; // space has no tile in this layer
+  for (int ts = map->nTilesets - 1; ts >= 0; --ts)
+  {
+    TiledTilesetRef* ref = &map->tilesetRefs[ts];
+    TiledTileset* tileset = ref->tileset;
+    int tileIndex = gid - ref->firstGid;
+    if (tileIndex < tileset->tileCount)
+    {
+      TiledTile* tile = &tileset->tiles[tileIndex];
+      printf("Found tile: %d (%d,%d)\n", tileIndex, tile->x, tile->y);
+      return tile;
+    }
+  }
+  fprintf(stderr, "Tile not found for GID %d.\n", gid);
+  return 0;
+}
+
+TiledMap* TiledMap_Load(const char* filename)
+{
   SDL_RWops* rw = RWopenRead(filename);
   if (!rw) return 0;
   TiledMap* map = MallocOrDie(sizeof(TiledMap));
@@ -105,14 +147,21 @@ TiledMap* TiledLoadMap(const char* filename)
       " tw=%d, th=%d, nt=%d, nl=%d\n",
       map->width, map->height,
       map->tileWidth, map->tileHeight, map->nTilesets, map->nLayers);
-  map->tilesetRefs = (TiledTilesetRef*)MallocOrDie(map->nTilesets * sizeof(TiledTilesetRef));
+  map->tilesetRefs = MallocOrDie(map->nTilesets * sizeof(TiledTilesetRef));
   for (int i=0; i < map->nTilesets; ++i)
-    LoadTilesetRef(rw, &map->tilesetRefs[i]);
+    LoadTilesetRef(rw, &map->tilesetRefs[i], map->tileWidth, map->tileHeight);
   size_t singleLayerCellCount = map->width * map->height;
   size_t totalCellCount = map->nLayers * singleLayerCellCount;
-  map->layers = (TiledLayer*)MallocOrDie(totalCellCount * sizeof(Sint16));
-  int ok = ReadInts16(rw, map->layers->cells, totalCellCount);
-  assert(ok);
+  Sint16* tileGids = MallocOrDie(totalCellCount * sizeof(Sint16));
+  if (!ReadInts16(rw, tileGids, totalCellCount)) return 0;
+  TiledTile** tiles = MallocOrDie(totalCellCount * sizeof(TiledTile**));
+  for (int t=0; t < totalCellCount; ++t)
+  {
+    int gid = tileGids[t];
+    tiles[t] = TiledMap_FindTile(map, gid);
+  }
+  free(tileGids);
+  map->layerTiles = tiles;
   return map;
 }
 

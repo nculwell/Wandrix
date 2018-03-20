@@ -30,6 +30,8 @@ struct Size maxTextureSize;
 struct Size mapImageSize;
 int quitting = 0;
 
+TiledMap* tiledMap = 0;
+
 typedef struct Tile {
 
 } Tile;
@@ -113,8 +115,8 @@ int Init()
   center.x = screen->w / 2;
   center.y = screen->h / 2;
   atexit(AtExitHandler);
-  TiledMap* teMap = TiledLoadMap("map.wtm");
-  if (!teMap) return 0;
+  tiledMap = TiledMap_Load("map.wtm");
+  if (!tiledMap) return 0;
   return 1;
 }
 
@@ -220,13 +222,8 @@ void UpdateLogic()
 
 int PRINT_IN_DRAW_TEXTURE = 0;
 
-// Arguments:
-// - screenRect is the position of the screen (viewport) relative to the map.
-// - texture is the texture to draw.
-// - textureRect is the position/size of the texture relative to the map.
-// Summary:
-// Finds the intersection of the viewport with the texture and draws the visible part.
-int DrawTexture(SDL_Rect* screenRect, SDL_Texture* texture, SDL_Rect* textureRect)
+int DrawTextureWithOffset(SDL_Rect* screenRect, SDL_Texture* texture,
+    SDL_Rect* textureRect, int textureOffsetX, int textureOffsetY)
 {
   SDL_Rect intersectRect;
   int intersects =
@@ -234,8 +231,8 @@ int DrawTexture(SDL_Rect* screenRect, SDL_Texture* texture, SDL_Rect* textureRec
   if (intersects)
   {
     SDL_Rect sourceRect = {
-      intersectRect.x - textureRect->x,
-      intersectRect.y - textureRect->y,
+      intersectRect.x - textureRect->x + textureOffsetX,
+      intersectRect.y - textureRect->y + textureOffsetY,
       intersectRect.w, intersectRect.h };
     SDL_Rect screenDestRect = {
       intersectRect.x - screenRect->x,
@@ -244,6 +241,51 @@ int DrawTexture(SDL_Rect* screenRect, SDL_Texture* texture, SDL_Rect* textureRec
     SDL_RenderCopy(renderer, texture, &sourceRect, &screenDestRect);
   }
   return intersects;
+}
+
+// Arguments:
+// - screenRect is the position of the screen (viewport) relative to the map.
+// - texture is the texture to draw.
+// - textureRect is the position/size of the texture relative to the map.
+// Summary:
+// Finds the intersection of the viewport with the texture and draws the visible part.
+int DrawTexture(SDL_Rect* screenRect, SDL_Texture* texture, SDL_Rect* textureRect)
+{
+  return DrawTextureWithOffset(screenRect, texture, textureRect, 0, 0);
+}
+
+void TiledMap_Draw(TiledMap* map, SDL_Rect* screenRect)
+{
+  //SDL_Rect wholeMapRect = { 0, 0,
+  //  map->width * map->tileWidth, map->height * map->tileHeight };
+  // TODO: Only iterate over visible tiles.
+  SDL_Rect tileRect = { 0, 0,  map->tileWidth, map->tileHeight };
+  //TiledTile* tile = &map->layers->tiles[0];
+  int t=0;
+  for (int lyr=0; lyr < map->nLayers; ++lyr)
+  {
+    for (int r=0; r < map->height; ++r)
+    {
+      for (int c=0; c < map->width; ++c)
+      {
+        TiledTile* tile = map->layerTiles[t];
+        //printf("%d %p\n", t, tile);fflush(stdout);
+        //printf("X");fflush(stdout);
+        if (tile)
+        {
+          tileRect.x = c * map->tileWidth;
+          tileRect.y = r * map->tileHeight;
+          //printf("Tile: "); fflush(stdout);
+          //printf("X: %d", tile->x); fflush(stdout);
+          //printf("Y: %d\n", tile->y); fflush(stdout);
+          DrawTextureWithOffset(screenRect,
+              tile->tex, &tileRect, tile->x, tile->y);
+        }
+        //++tile;
+        ++t;
+      }
+    }
+  }
 }
 
 void DrawMap(SDL_Rect* screenRect)
@@ -280,7 +322,8 @@ void Draw(int phase)
     player.c.pos.x - center.x + player.c.mov.x * phase / PHASE_GRAIN,
     player.c.pos.y - center.y + player.c.mov.y * phase / PHASE_GRAIN,
     screen->w, screen->h };
-  DrawMap(&screenRect);
+  //DrawMap(&screenRect);
+  TiledMap_Draw(tiledMap, &screenRect);
   DrawPlayer(&screenRect, phase);
   DrawNpcs(&screenRect, phase);
   SDL_RenderPresent(renderer);
@@ -320,6 +363,8 @@ int MainLoop()
          logicFramesCount = 0,
          renderFrameDurationMs = frameRateCap > 0 ? 1000 / frameRateCap : 0,
          renderFramesCount = 0;
+  fflush(stdout);
+  fflush(stderr);
   while (!quitting)
   {
     // TODO: Reset frame times once per second to prevent rounding

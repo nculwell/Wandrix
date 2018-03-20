@@ -32,22 +32,24 @@ struct IntGrid {
   Sint16* cells;
 };
 
+typedef struct TiledTile {
+  int x, y;
+  SDL_Texture* tex;
+} TiledTile;
 typedef struct TiledTileset {
   Sint32 tileCount, columns;
   struct Image image;
   char* sourceFilename;
+  TiledTile* tiles;
 } TiledTileset;
 typedef struct TiledTilesetRef {
   Sint32 firstGid;
   TiledTileset* tileset;
 } TiledTilesetRef;
-typedef struct TiledLayer {
-  Sint16 cells[0];
-} TiledLayer;
 typedef struct TiledMap {
   Sint32 width, height, tileWidth, tileHeight, nTilesets, nLayers;
   TiledTilesetRef* tilesetRefs;
-  TiledLayer* layers;
+  TiledTile** layerTiles;
 } TiledMap;
 
 
@@ -74,5 +76,5 @@ Sint16 ParseInt16(const char* str);
 int LoadImage(struct Image* img, int createTexture);
 int InitImage();
 
-TiledMap* TiledLoadMap(const char* filename);
+TiledMap* TiledMap_Load(const char* filename);
 
