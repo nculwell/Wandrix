@@ -24,22 +24,12 @@ SDL_Window* window;
 SDL_Renderer* renderer;
 SDL_Surface* screen;
 int frameRateCap;
-struct Image map = { .path = "testimg/map.png" };
 struct Coords center;
 struct Size maxTextureSize;
 struct Size mapImageSize;
 int quitting = 0;
 
 TiledMap* tiledMap = 0;
-
-typedef struct Tile {
-
-} Tile;
-
-typedef struct TileMap {
-  int rows, cols;
-  Tile* tiles;
-} TileMap;
 
 struct Player player = {
   { .name = "Player", .img = { .path = "testimg/fork32.png" }, .pos = {0,0}, }
@@ -157,10 +147,6 @@ int LoadMap()
 int LoadAssets()
 {
   if (!LoadMap()) return 0;
-  if (!LoadImage(&map, 1)) return 0;
-  mapImageSize.w = map.sfc->w;
-  mapImageSize.h = map.sfc->h;
-  SDL_FreeSurface(map.sfc);
   if (!LoadImage(&player.c.img, 1))
   {
     fprintf(stderr, "Unable to load player image.\n");
@@ -283,7 +269,7 @@ void TiledMap_Draw(TiledMap* map, SDL_Rect* screenRect)
   //TiledTile* tile = &map->layers->tiles[0];
   int nTilesInRow = map->nLayers * map->width;
   int firstTileOffset = nTilesInRow * firstVisibleRow + map->nLayers * firstVisibleCol;
-  printf("nTilesInRow=%d, firstTileOffset=%d\n", nTilesInRow, firstTileOffset);
+  //printf("nTilesInRow=%d, firstTileOffset=%d\n", nTilesInRow, firstTileOffset);
   TiledTile** nextRowFirstTile = map->layerTiles + firstTileOffset;
   int firstTileX = firstVisibleCol * map->tileWidth;
   tileRect.y = firstVisibleRow * map->tileHeight;
@@ -309,12 +295,6 @@ void TiledMap_Draw(TiledMap* map, SDL_Rect* screenRect)
       }
     }
   }
-}
-
-void DrawMap(SDL_Rect* screenRect)
-{
-  SDL_Rect wholeMapRect = { 0, 0, mapImageSize.w, mapImageSize.h };
-  DrawTexture(screenRect, map.tex, &wholeMapRect);
 }
 
 void DrawChar(SDL_Rect* screenRect, struct CharBase* c, int phase)
@@ -345,10 +325,9 @@ void Draw(int phase)
     player.c.pos.x - center.x + player.c.mov.x * phase / PHASE_GRAIN,
     player.c.pos.y - center.y + player.c.mov.y * phase / PHASE_GRAIN,
     screen->w, screen->h };
-  //DrawMap(&screenRect);
   TiledMap_Draw(tiledMap, &screenRect);
   DrawPlayer(&screenRect, phase);
-  //DrawNpcs(&screenRect, phase);
+  DrawNpcs(&screenRect, phase);
   SDL_RenderPresent(renderer);
 }
 
