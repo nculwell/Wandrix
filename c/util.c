@@ -229,3 +229,33 @@ int InitImage()
   return 1;
 }
 
+int USqrt(unsigned n)
+{
+  // Find the magnitude of n.
+  unsigned shiftBits = 2;
+  unsigned shifted = n >> shiftBits;
+  while (shifted > 0)
+  {
+    shiftBits += 2;
+    shifted >>= 2;
+  }
+  shiftBits -= 2;
+  // Find digits of result.
+  unsigned result = 0;
+  do {
+    result <<= 1;
+    unsigned candidateResult = result + 1;
+    unsigned candidateResultSquared = candidateResult * candidateResult;
+    if (candidateResultSquared == n >> shiftBits)
+      result = candidateResult;
+    shiftBits -= 2;
+  } while (shiftBits >= 0);
+  return result;
+}
+
+int SSqrt(int n)
+{
+  assert(n >= 0);
+  return (int)USqrt((unsigned)n);
+}
+
