@@ -7,6 +7,8 @@
 #include <assert.h>
 #include <limits.h>
 
+#define PHASE_GRAIN 10000
+
 typedef struct Coords { int x, y; } Coords;
 struct Size { int w, h; };
 struct Image { 
@@ -52,7 +54,6 @@ typedef struct TiledMap {
   TiledTile** layerTiles;
 } TiledMap;
 
-
 #define Rect_UNPACK(SDL_RECT_PTR) \
   ((SDL_RECT_PTR)->x), ((SDL_RECT_PTR)->y), ((SDL_RECT_PTR)->w), ((SDL_RECT_PTR)->h)
 
@@ -84,4 +85,12 @@ int LoadImage(struct Image* img, int createTexture);
 int InitImage();
 
 TiledMap* TiledMap_Load(const char* filename);
+
+int InitDisplay(
+    const char* windowName, int screenW, int screenH,
+    int minFrameRateCap, int* frameRateCap);
+void DestroyDisplay();
+void Draw(
+    int phase, TiledMap* map,
+    struct Player* player, struct Npc* npcs, int npcCount);
 

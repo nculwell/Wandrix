@@ -2,11 +2,9 @@
 */
 
 #include "wandrix.h"
-#define PHASE_GRAIN 10000
 
 const char* WINDOW_NAME = "Wandrix";
 const int SCREEN_W = 800, SCREEN_H = 600;
-const int FULLSCREEN = 1;
 const Uint32 LOGIC_FRAMES_PER_SEC = 20; // fixed rate
 const int MIN_FRAME_RATE_CAP = 30;
 const char* MAP_MASTER_FILENAME = "map_master.txt";
@@ -20,14 +18,8 @@ const Uint32
   KEY_LEFT = 0x04,
   KEY_RIGHT = 0x08;
 
-SDL_Window* window;
-SDL_Renderer* renderer;
-SDL_Surface* screen;
-int frameRateCap;
-struct Coords center;
-struct Size maxTextureSize;
-struct Size mapImageSize;
-int quitting = 0;
+static int frameRateCap;
+static int quitting = 0;
 
 TiledMap* tiledMap = 0;
 
@@ -44,9 +36,7 @@ struct Npc npcs[NPC_COUNT] = {
 
 void AtExitHandler()
 {
-  // TODO: Destroy textures and surfaces
-  SDL_DestroyRenderer(renderer);
-  SDL_DestroyWindow(window);
+  DestroyDisplay();
   SDL_Quit();
 }
 
@@ -58,52 +48,7 @@ int Init()
     return 0;
   }
   if (!InitImage()) return 0;
-  Uint32 windowFlags = (FULLSCREEN * SDL_WINDOW_FULLSCREEN_DESKTOP);
-  int wPos = SDL_WINDOWPOS_CENTERED;
-  window = SDL_CreateWindow(WINDOW_NAME, wPos, wPos, SCREEN_W, SCREEN_H, windowFlags);
-  if (!window)
-  {
-    fprintf(stderr, "Create window failed: %s\n", SDL_GetError());
-    return 0;
-  }
-  SDL_DisplayMode displayMode;
-  if (0 != SDL_GetCurrentDisplayMode(SDL_GetWindowDisplayIndex(window), &displayMode))
-  {
-    fprintf(stderr, "GetCurrentDisplayMode failed: %s\n", SDL_GetError());
-    return 0;
-  }
-  int vsync;
-  if (displayMode.refresh_rate >= MIN_FRAME_RATE_CAP)
-  {
-    frameRateCap = 0;
-    vsync = 1;
-  }
-  else
-  {
-    frameRateCap = displayMode.refresh_rate;
-    while (frameRateCap < MIN_FRAME_RATE_CAP)
-      frameRateCap *= 2;
-    vsync = 0;
-  }
-  renderer = SDL_CreateRenderer(window, -1,
-      SDL_RENDERER_ACCELERATED | (vsync * SDL_RENDERER_PRESENTVSYNC));
-  if (!renderer)
-  {
-    fprintf(stderr, "Create renderer failed: %s\n", SDL_GetError());
-    return 0;
-  }
-  SDL_RendererInfo rendererInfo;
-  if (0 > SDL_GetRendererInfo(renderer, &rendererInfo))
-  {
-    fprintf(stderr, "Get renderer info failed: %s\n", SDL_GetError());
-    return 0;
-  }
-  maxTextureSize.w = rendererInfo.max_texture_width;
-  maxTextureSize.h = rendererInfo.max_texture_height;
-  printf("Max texture size: %dx%d\n", maxTextureSize.w, maxTextureSize.h);
-  screen = SDL_GetWindowSurface(window);
-  center.x = screen->w / 2;
-  center.y = screen->h / 2;
+  InitDisplay(WINDOW_NAME, SCREEN_W, SCREEN_H, MIN_FRAME_RATE_CAP, &frameRateCap);
   atexit(AtExitHandler);
   tiledMap = TiledMap_Load("map.wtm");
   if (!tiledMap) return 0;
@@ -206,131 +151,6 @@ void UpdateLogic()
   keypresses = 0;
 }
 
-int DrawTextureWithOffset(SDL_Rect* screenRect, SDL_Texture* texture,
-    SDL_Rect* textureRect, int textureOffsetX, int textureOffsetY)
-{
-  SDL_Rect intersectRect;
-  int intersects =
-    (SDL_TRUE == SDL_IntersectRect(screenRect, textureRect, &intersectRect));
-  if (intersects)
-  {
-    SDL_Rect sourceRect = {
-      intersectRect.x - textureRect->x + textureOffsetX,
-      intersectRect.y - textureRect->y + textureOffsetY,
-      intersectRect.w, intersectRect.h };
-    SDL_Rect screenDestRect = {
-      intersectRect.x - screenRect->x,
-      intersectRect.y - screenRect->y,
-      intersectRect.w, intersectRect.h };
-    SDL_RenderCopy(renderer, texture, &sourceRect, &screenDestRect);
-  }
-  return intersects;
-}
-
-// Arguments:
-// - screenRect is the position of the screen (viewport) relative to the map.
-// - texture is the texture to draw.
-// - textureRect is the position/size of the texture relative to the map.
-// Summary:
-// Finds the intersection of the viewport with the texture and draws the visible part.
-int DrawTexture(SDL_Rect* screenRect, SDL_Texture* texture, SDL_Rect* textureRect)
-{
-  return DrawTextureWithOffset(screenRect, texture, textureRect, 0, 0);
-}
-
-static void ComputeVisibleCoords(int* resultFirstVisible, int* resultNVisible,
-    int nTiles, int tileSize, int intersectEdge, int intersectSize)
-{
-  int firstVisible = intersectEdge / tileSize;
-  if (firstVisible * tileSize > intersectEdge)
-    --firstVisible;
-  int nVisible = intersectSize / tileSize;
-  while ((firstVisible + nVisible) * tileSize < intersectEdge + intersectSize)
-    ++nVisible;
-  *resultFirstVisible = firstVisible;
-  *resultNVisible = nVisible;
-}
-
-void TiledMap_Draw(TiledMap* map, SDL_Rect* screenRect)
-{
-  int mapWidthPixels = map->width * map->tileWidth;
-  int mapHeightPixels = map->height * map->tileHeight;
-  SDL_Rect wholeMapRect = { 0, 0, mapWidthPixels, mapHeightPixels };
-  SDL_Rect intersectRect;
-  if (SDL_TRUE != SDL_IntersectRect(screenRect, &wholeMapRect, &intersectRect))
-    return;
-  int firstVisibleRow, nVisibleRows, firstVisibleCol, nVisibleCols;
-  ComputeVisibleCoords(&firstVisibleRow, &nVisibleRows,
-      map->height, map->tileHeight, intersectRect.y, intersectRect.h);
-  ComputeVisibleCoords(&firstVisibleCol, &nVisibleCols,
-      map->width, map->tileWidth, intersectRect.x, intersectRect.w);
-  // TODO: Only iterate over visible tiles.
-  SDL_Rect tileRect = { 0, 0,  map->tileWidth, map->tileHeight };
-  //TiledTile* tile = &map->layers->tiles[0];
-  int nTilesInRow = map->nLayers * map->width;
-  int firstTileOffset = nTilesInRow * firstVisibleRow + map->nLayers * firstVisibleCol;
-  //printf("nTilesInRow=%d, firstTileOffset=%d\n", nTilesInRow, firstTileOffset);
-  TiledTile** nextRowFirstTile = map->layerTiles + firstTileOffset;
-  int firstTileX = firstVisibleCol * map->tileWidth;
-  tileRect.y = firstVisibleRow * map->tileHeight;
-  for (int r = firstVisibleRow;
-      r < firstVisibleRow + nVisibleRows;
-      ++r, tileRect.y += map->tileHeight)
-  {
-    TiledTile** tile = nextRowFirstTile;
-    nextRowFirstTile += nTilesInRow;
-    tileRect.x = firstTileX;
-    for (int c = firstVisibleCol;
-        c < firstVisibleCol + nVisibleCols;
-        ++c, tileRect.x += map->tileWidth)
-    {
-      for (int layer=0; layer < map->nLayers; ++layer)
-      {
-        if (*tile)
-        {
-          DrawTextureWithOffset(screenRect,
-              (*tile)->tex, &tileRect, (*tile)->x, (*tile)->y);
-        }
-        ++tile;
-      }
-    }
-  }
-}
-
-void DrawChar(SDL_Rect* screenRect, struct CharBase* c, int phase)
-{
-  int dx = c->mov.x * phase / PHASE_GRAIN,
-      dy = c->mov.y * phase / PHASE_GRAIN;
-  SDL_Rect charRect = { c->pos.x + dx, c->pos.y + dy, c->img.sfc->w, c->img.sfc->h };
-  DrawTexture(screenRect, c->img.tex, &charRect);
-}
-
-void DrawPlayer(SDL_Rect* screenRect, int phase)
-{
-  DrawChar(screenRect, &player.c, phase);
-}
-
-void DrawNpcs(SDL_Rect* screenRect, int phase)
-{
-  for (int i=0; i < NPC_COUNT; ++i)
-    if (npcs[i].id)
-      DrawChar(screenRect, &npcs[i].c, phase);
-}
-
-void Draw(int phase)
-{
-  SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0xFF);
-  SDL_RenderClear(renderer);
-  SDL_Rect screenRect = {
-    player.c.pos.x - center.x + player.c.mov.x * phase / PHASE_GRAIN,
-    player.c.pos.y - center.y + player.c.mov.y * phase / PHASE_GRAIN,
-    screen->w, screen->h };
-  TiledMap_Draw(tiledMap, &screenRect);
-  DrawPlayer(&screenRect, phase);
-  DrawNpcs(&screenRect, phase);
-  SDL_RenderPresent(renderer);
-}
-
 void HandleKeypress(SDL_Event* e)
 {
   switch (e->key.keysym.sym)
@@ -407,7 +227,7 @@ int MainLoop()
       assert(phase >= 0);
       assert(phase <= PHASE_GRAIN);
       //printf("PHASE: %d\n", phase);
-      Draw(phase);
+      Draw(phase, tiledMap, &player, npcs, NPC_COUNT);
     }
   }
   return 1;

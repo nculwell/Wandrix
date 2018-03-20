@@ -2,7 +2,7 @@
 
 CFLAGS="-std=c11 -Wall -Werror -g $(pkg-config --cflags sdl2 SDL2_image)"
 LINKFLAGS="$(pkg-config --libs sdl2 SDL2_image)"
-CFILES="util.c wandrix.c tiled.c"
+CFILES="util.c wandrix.c tiled.c draw.c"
 gcc -o wand $CFLAGS $CFILES gamemain.c $LINKFLAGS \
   || exit $?
 gcc -o utiltest $CFLAGS $CFILES utiltest.c $LINKFLAGS \
