@@ -7,6 +7,8 @@
 extern SDL_Renderer* renderer;
 extern SDL_Surface* screen;
 
+static int IntSqrt(int n);
+
 struct Coords Coords_Scale(int scalar, struct Coords s)
 {
   s.x *= scalar;
@@ -18,6 +20,47 @@ struct Coords Coords_Add(struct Coords a, struct Coords b)
 {
   struct Coords sum = { a.x + b.x, a.y + b.y };
   return sum;
+}
+
+int Coords_ApproxDist(struct Coords point1, struct Coords point2)
+{
+  int xDist = point1.x - point2.x;
+  if (xDist < 0) xDist = -xDist;
+  int yDist = point1.y - point2.y;
+  if (yDist < 0) yDist = -yDist;
+  int max, min;
+  if (xDist > yDist) { max = xDist; min = yDist; }
+  else { max = yDist; min = xDist; }
+  if ((max >> 1) < min)
+  {
+    return max + (max >> 2);
+  }
+  else
+  {
+    return max;
+  }
+}
+
+int Coords_ExactDist(struct Coords point1, struct Coords point2)
+{
+  int xDiff = point1.x - point2.x;
+  int yDiff = point1.y - point2.y;
+  int xSquare = xDiff * xDiff;
+  int ySquare = yDiff * yDiff;
+  int distanceSquare = xSquare + ySquare;
+  int distance = IntSqrt(distanceSquare);
+  return distance;
+}
+
+int Coords_FloatDist(struct Coords point1, struct Coords point2)
+{
+  int xDiff = point1.x - point2.x;
+  int yDiff = point1.y - point2.y;
+  int xSquare = xDiff * xDiff;
+  int ySquare = yDiff * yDiff;
+  int distanceSquare = xSquare + ySquare;
+  int distance = (int)sqrt(distanceSquare);
+  return distance;
 }
 
 struct SDL_Rect Rect_Combine(struct Coords c, struct Size s)
@@ -245,7 +288,8 @@ int IntLog2(int n)
   return i;
 }
 
-int IntSqrt(int n) {
+static int IntSqrt(int n)
+{
   assert(n >= 0);
   if (n == 0) return 0;
   if (n < 4) return 1;

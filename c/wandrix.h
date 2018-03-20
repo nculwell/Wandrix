@@ -7,7 +7,7 @@
 #include <assert.h>
 #include <limits.h>
 
-struct Coords { int x, y; };
+typedef struct Coords { int x, y; } Coords;
 struct Size { int w, h; };
 struct Image { 
   const char* path; SDL_Surface* sfc; SDL_Texture* tex;
@@ -56,8 +56,14 @@ typedef struct TiledMap {
 #define Rect_UNPACK(SDL_RECT_PTR) \
   ((SDL_RECT_PTR)->x), ((SDL_RECT_PTR)->y), ((SDL_RECT_PTR)->w), ((SDL_RECT_PTR)->h)
 
+typedef int (*Coords_DistanceFunction)(
+    struct Coords point1, struct Coords point2);
+
 struct Coords Coords_Scale(int scalar, struct Coords s);
 struct Coords Coords_Add(struct Coords a, struct Coords b);
+int Coords_ApproxDist(struct Coords point1, struct Coords point2);
+int Coords_ExactDist(struct Coords point1, struct Coords point2);
+int Coords_FloatDist(struct Coords point1, struct Coords point2);
 struct SDL_Rect Rect_Combine(struct Coords c, struct Size s);
 SDL_Rect CharBase_GetRect(struct CharBase* c);
 struct Size CharBase_GetSize(struct CharBase* c);
