@@ -229,7 +229,49 @@ int InitImage()
   return 1;
 }
 
-int USqrt(unsigned n)
+int IntLog2(int n)
+{
+  if (n <= 0)
+  {
+    fprintf(stderr, "IntLog2 is invalid for n <= 0 (n=%d).\n", n);
+    exit(1);
+  }
+  int i = 0;
+  while (n > 1)
+  {
+    ++i;
+    n <<= 1;
+  }
+  return i;
+}
+
+int IntSqrt(int n) {
+  assert(n >= 0);
+  if (n == 0) return 0;
+  if (n < 4) return 1;
+  // Find the highest power of four <= n.
+  // Start with the high bit and shift down.
+  int bit = 1 << (sizeof(int) * 8 - 2);
+  while (bit > n)
+    bit >>= 2;
+  // Now compute the square root.
+  int result = 0;
+  while (bit != 0) {
+    if (n >= result + bit)
+    {
+      n -= result + bit;
+      result = (result >> 1) + bit;
+    }
+    else
+    {
+      result >>= 1;
+    }
+    bit >>= 2;
+  }
+  return result;
+}
+
+int UIntSqrt(unsigned n)
 {
   // Find the magnitude of n.
   unsigned shiftBits = 2;
@@ -251,11 +293,5 @@ int USqrt(unsigned n)
     shiftBits -= 2;
   } while (shiftBits >= 0);
   return result;
-}
-
-int SSqrt(int n)
-{
-  assert(n >= 0);
-  return (int)USqrt((unsigned)n);
 }
 
