@@ -61,6 +61,7 @@ typedef int (*Coords_DistanceFunction)(
 
 struct Coords Coords_Scale(int scalar, struct Coords s);
 struct Coords Coords_Add(struct Coords a, struct Coords b);
+int Coords_SimpleApproxDist(struct Coords point1, struct Coords point2);
 int Coords_ApproxDist(struct Coords point1, struct Coords point2);
 int Coords_ExactDist(struct Coords point1, struct Coords point2);
 int Coords_FloatDist(struct Coords point1, struct Coords point2);

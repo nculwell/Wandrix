@@ -22,6 +22,18 @@ struct Coords Coords_Add(struct Coords a, struct Coords b)
   return sum;
 }
 
+int Coords_SimpleApproxDist(struct Coords point1, struct Coords point2)
+{
+  int xDist = point1.x - point2.x;
+  if (xDist < 0) xDist = -xDist;
+  int yDist = point1.y - point2.y;
+  if (yDist < 0) yDist = -yDist;
+  int max;
+  if (xDist > yDist) { max = xDist; }
+  else { max = yDist; }
+  return max;
+}
+
 int Coords_ApproxDist(struct Coords point1, struct Coords point2)
 {
   int xDist = point1.x - point2.x;
