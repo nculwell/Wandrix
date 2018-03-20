@@ -42,7 +42,7 @@ typedef struct TileMap {
 } TileMap;
 
 struct Player player = {
-  { .name = "Player", .img = { .path = "testimg/y32.png" }, .pos = {0,0}, }
+  { .name = "Player", .img = { .path = "testimg/fork32.png" }, .pos = {0,0}, }
 };
 
 struct Npc npcs[NPC_COUNT] = {
@@ -262,16 +262,17 @@ void TiledMap_Draw(TiledMap* map, SDL_Rect* screenRect)
   SDL_Rect tileRect = { 0, 0,  map->tileWidth, map->tileHeight };
   //TiledTile* tile = &map->layers->tiles[0];
   int t=0;
+  TiledTile** tile = map->layerTiles;
   for (int lyr=0; lyr < map->nLayers; ++lyr)
   {
     for (int r=0; r < map->height; ++r)
     {
       for (int c=0; c < map->width; ++c)
       {
-        TiledTile* tile = map->layerTiles[t];
+        //TiledTile* tile = map->layerTiles[t];
         //printf("%d %p\n", t, tile);fflush(stdout);
         //printf("X");fflush(stdout);
-        if (tile)
+        if (*tile)
         {
           tileRect.x = c * map->tileWidth;
           tileRect.y = r * map->tileHeight;
@@ -279,9 +280,9 @@ void TiledMap_Draw(TiledMap* map, SDL_Rect* screenRect)
           //printf("X: %d", tile->x); fflush(stdout);
           //printf("Y: %d\n", tile->y); fflush(stdout);
           DrawTextureWithOffset(screenRect,
-              tile->tex, &tileRect, tile->x, tile->y);
+              (*tile)->tex, &tileRect, (*tile)->x, (*tile)->y);
         }
-        //++tile;
+        ++tile;
         ++t;
       }
     }
@@ -325,7 +326,7 @@ void Draw(int phase)
   //DrawMap(&screenRect);
   TiledMap_Draw(tiledMap, &screenRect);
   DrawPlayer(&screenRect, phase);
-  DrawNpcs(&screenRect, phase);
+  //DrawNpcs(&screenRect, phase);
   SDL_RenderPresent(renderer);
 }
 
