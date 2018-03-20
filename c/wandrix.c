@@ -364,8 +364,7 @@ int MainLoop()
          logicFramesCount = 0,
          renderFrameDurationMs = frameRateCap > 0 ? 1000 / frameRateCap : 0,
          renderFramesCount = 0;
-  fflush(stdout);
-  fflush(stderr);
+  fflush(stdout); // flush output from the init process
   while (!quitting)
   {
     // TODO: Reset frame times once per second to prevent rounding
@@ -377,7 +376,7 @@ int MainLoop()
     while (nextSecond < time)
     {
       nextSecond += 1000;
-      printf("FPS: LOGIC=%d, RENDER=%d\n", logicFramesCount, renderFramesCount);
+      //printf("FPS: LOGIC=%d, RENDER=%d\n", logicFramesCount, renderFramesCount);
       logicFramesCount = renderFramesCount = 0;
     }
     while (nextLogicFrameTime < time)

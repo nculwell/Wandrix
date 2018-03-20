@@ -204,13 +204,7 @@ int LoadImage(struct Image* img, int createTexture)
     fprintf(stderr, "Unable to load image '%s': %s\n", img->path, IMG_GetError());
     return 0;
   }
-  img->sfc = SDL_ConvertSurface(loadedSurface, screen->format, 0);
-  SDL_FreeSurface(loadedSurface);
-  if (!img->sfc)
-  {
-    fprintf(stderr, "Unable to optimize image '%s': %s\n", img->path, SDL_GetError());
-    return 0;
-  }
+  img->sfc = loadedSurface;
   if (createTexture)
   {
     img->tex = SDL_CreateTextureFromSurface(renderer, img->sfc);
