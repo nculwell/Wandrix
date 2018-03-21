@@ -2,7 +2,7 @@
 
 CFLAGS="-std=c11 -Wall -Wextra -Werror $(pkg-config --cflags sdl2 SDL2_image)"
 LINKFLAGS="$(pkg-config --libs sdl2 SDL2_image)"
-CFILES="util.c wandrix.c tiled.c draw.c"
+CFILES="util.c wandrix.c tiled.c draw.c circle.c"
 gcc -o wand $CFLAGS -g $CFILES gamemain.c $LINKFLAGS \
   || exit $?
 if [ "$1" == "all" ]; then

@@ -4,7 +4,11 @@
 #include "wandrix.h"
 #include <SDL_image.h>
 
+SDL_Surface* CreateQuarterCircle(int radius, Uint32 colorRGBA);
+
 const double PI = 3.14159265358979323846264338327950288;
+
+static const int BORDER_THICKNESS = 32;
 
 // Distance (in tiles) where light fades to zero.
 // This is the limit of visibility in unobstructed terrain.
@@ -23,11 +27,25 @@ struct Display {
   SDL_Window* window;
   SDL_Renderer* renderer;
   SDL_Surface* screen;
-  struct Coords center;
   struct Size maxTextureSize;
 };
 
 static struct Display display;
+static SDL_Texture* quarterCircle;
+
+#define RGB_TO_RGBA(COLOR) (((COLOR) << 8) | 0xFF)
+
+const Uint32 COLOR_FRAME = 0x5455FF;
+const Uint32 COLOR_UI_PANE = 0x402020;
+const Uint32 COLOR_BLACK = 0;
+
+void SetColor(Uint32 color)
+{
+  Uint32 red   = (color >> 16) & 0xFF;
+  Uint32 green = (color >>  8) & 0xFF;
+  Uint32 blue  =  color        & 0xFF;
+  SDL_SetRenderDrawColor(display.renderer, red, green, blue, 0xFF);
+}
 
 void DestroyDisplay()
 {
@@ -84,8 +102,14 @@ int InitDisplay(
   display.maxTextureSize.h = rendererInfo.max_texture_height;
   printf("Max texture size: %dx%d\n", display.maxTextureSize.w, display.maxTextureSize.h);
   display.screen = SDL_GetWindowSurface(display.window);
-  display.center.x = display.screen->w / 2;
-  display.center.y = display.screen->h / 2;
+  SDL_Surface* quarterCircleSurface = CreateQuarterCircle(BORDER_THICKNESS, RGB_TO_RGBA(COLOR_FRAME));
+  quarterCircle = SDL_CreateTextureFromSurface(display.renderer, quarterCircleSurface);
+  SDL_FreeSurface(quarterCircleSurface);
+  if (!quarterCircle)
+  {
+    fprintf(stderr, "Failed to convert circle surface to texture. %s\n", SDL_GetError());
+    return 0;
+  }
   return 1;
 }
 
@@ -180,7 +204,7 @@ void TiledMap_Draw(TiledMap* map, SDL_Rect* mapViewRect)
 {
   // TODO: Draw some default tile for areas off the map edge.
   Coords mapViewCenter = {
-    mapViewRect->x + display.center.x, mapViewRect->y + display.center.y };
+    mapViewRect->x + mapViewRect->w / 2, mapViewRect->y + mapViewRect->h / 2 };
   int mapWidthPixels = map->width * map->tileWidth;
   int mapHeightPixels = map->height * map->tileHeight;
   SDL_Rect wholeMapRect = { 0, 0, mapWidthPixels, mapHeightPixels };
@@ -298,19 +322,91 @@ void DrawNpcs(SDL_Rect* mapViewRect, int phase, struct Npc* npcs, int npcCount)
       DrawChar(mapViewRect, &npcs[i].c, phase);
 }
 
+void DrawUi(SDL_Rect* uiViewRect)
+{
+  SetColor(COLOR_UI_PANE);
+  SDL_RenderFillRect(display.renderer, uiViewRect);
+}
+
+void DrawLayout(SDL_Rect* mapDisplayRect, SDL_Rect* uiDisplayRect)
+{
+  // Calculate rectange sizes.
+  int isHorizontal = (display.screen->w >= display.screen->h);
+  int mapViewSize = isHorizontal ? display.screen->h : display.screen->w;
+  mapViewSize -= 2 * BORDER_THICKNESS;
+  SDL_Rect mapDisplayRectValue = {
+    BORDER_THICKNESS, BORDER_THICKNESS, mapViewSize, mapViewSize };
+  int uiDisplayShift = mapViewSize + 2 * BORDER_THICKNESS;
+  SDL_Rect uiDisplayRectValue = {
+    isHorizontal ? uiDisplayShift : BORDER_THICKNESS,
+    isHorizontal ? BORDER_THICKNESS : uiDisplayShift,
+    isHorizontal ? display.screen->w - uiDisplayShift - BORDER_THICKNESS : display.screen->w,
+    isHorizontal ? display.screen->h : display.screen->h - uiDisplayShift - BORDER_THICKNESS,
+  };
+  SDL_Rect divider = {
+    isHorizontal ? BORDER_THICKNESS + mapViewSize           : BORDER_THICKNESS,
+    isHorizontal ? BORDER_THICKNESS                         : BORDER_THICKNESS + mapViewSize,
+    isHorizontal ? BORDER_THICKNESS                         : display.screen->w - 2 * BORDER_THICKNESS,
+    isHorizontal ? display.screen->h - 2 * BORDER_THICKNESS : BORDER_THICKNESS,
+  };
+  int HALF_BORDER_THICKNESS = BORDER_THICKNESS / 2;
+  SDL_Rect borderTop = {
+    HALF_BORDER_THICKNESS, 0,
+    display.screen->w - BORDER_THICKNESS, BORDER_THICKNESS
+  };
+  SDL_Rect borderBottom = {
+    HALF_BORDER_THICKNESS, display.screen->h - BORDER_THICKNESS,
+    display.screen->w - BORDER_THICKNESS, BORDER_THICKNESS
+  };
+  SDL_Rect borderLeft = {
+    0, HALF_BORDER_THICKNESS,
+    BORDER_THICKNESS, display.screen->h - BORDER_THICKNESS
+  };
+  SDL_Rect borderRight = {
+    display.screen->w - BORDER_THICKNESS, HALF_BORDER_THICKNESS,
+    BORDER_THICKNESS, display.screen->h - BORDER_THICKNESS
+  };
+  SDL_Rect cornerTopLeft = { 0, 0,
+    HALF_BORDER_THICKNESS, HALF_BORDER_THICKNESS };
+  SDL_Rect cornerTopRight = { display.screen->w - HALF_BORDER_THICKNESS, 0,
+    HALF_BORDER_THICKNESS, HALF_BORDER_THICKNESS };
+  SDL_Rect cornerBottomLeft = { 0, display.screen->h - HALF_BORDER_THICKNESS,
+    HALF_BORDER_THICKNESS, HALF_BORDER_THICKNESS };
+  SDL_Rect cornerBottomRight = { display.screen->w - HALF_BORDER_THICKNESS, display.screen->h - HALF_BORDER_THICKNESS,
+    HALF_BORDER_THICKNESS, HALF_BORDER_THICKNESS };
+  *mapDisplayRect = mapDisplayRectValue;
+  *uiDisplayRect = uiDisplayRectValue;
+  // Draw frame.
+  SetColor(COLOR_FRAME);
+  //SDL_RenderFillRect(display.renderer, uiDisplayRect);
+  SDL_RenderFillRect(display.renderer, &borderTop);
+  SDL_RenderFillRect(display.renderer, &borderBottom);
+  SDL_RenderFillRect(display.renderer, &borderLeft);
+  SDL_RenderFillRect(display.renderer, &borderRight);
+  SDL_RenderFillRect(display.renderer, &divider);
+  SDL_RenderCopyEx(display.renderer, quarterCircle, 0, &cornerTopLeft, 0, 0, SDL_FLIP_HORIZONTAL | SDL_FLIP_VERTICAL);
+  SDL_RenderCopyEx(display.renderer, quarterCircle, 0, &cornerTopRight, 0, 0, SDL_FLIP_VERTICAL);
+  SDL_RenderCopyEx(display.renderer, quarterCircle, 0, &cornerBottomLeft, 0, 0, SDL_FLIP_HORIZONTAL);
+  SDL_RenderCopyEx(display.renderer, quarterCircle, 0, &cornerBottomRight, 0, 0, SDL_FLIP_NONE);
+}
+
 void Draw(int phase, TiledMap* map, struct Player* player, struct Npc* npcs, int npcCount)
 {
   SDL_SetRenderDrawColor(display.renderer, 0x00, 0x00, 0x00, 0xFF);
   SDL_RenderClear(display.renderer);
   SDL_SetRenderDrawBlendMode(display.renderer, SDL_BLENDMODE_BLEND);
-  SDL_SetRenderDrawColor(display.renderer, 0xFF, 0xFF, 0xFF, 0xFF);
+  //SDL_SetRenderDrawColor(display.renderer, 0xFF, 0xFF, 0xFF, 0xFF);
+  SDL_Rect mapDisplayRect, uiDisplayRect;
+  DrawLayout(&mapDisplayRect, &uiDisplayRect);
   SDL_Rect mapViewRect = {
-    player->c.pos.x - display.center.x + player->c.mov.x * phase / PHASE_GRAIN,
-    player->c.pos.y - display.center.y + player->c.mov.y * phase / PHASE_GRAIN,
-    display.screen->w, display.screen->h };
+    player->c.pos.x - mapDisplayRect.w / 2 + player->c.mov.x * phase / PHASE_GRAIN,
+    player->c.pos.y - mapDisplayRect.h / 2 + player->c.mov.y * phase / PHASE_GRAIN,
+    mapDisplayRect.w, mapDisplayRect.h
+  };
   TiledMap_Draw(map, &mapViewRect);
   DrawPlayer(&mapViewRect, phase, player);
   DrawNpcs(&mapViewRect, phase, npcs, npcCount);
+  //DrawUi(&uiDisplayRect);
   SDL_RenderPresent(display.renderer);
 }
 
