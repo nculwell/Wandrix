@@ -2,10 +2,6 @@
 */
 
 #include "wandrix.h"
-#include <SDL_image.h>
-
-extern SDL_Renderer* renderer;
-extern SDL_Surface* screen;
 
 static int IntSqrt(int n);
 
@@ -249,41 +245,6 @@ Sint16 ParseInt16(const char* str)
   return (Sint16)n;
 }
 
-int LoadImage(struct Image* img, int createTexture)
-{
-  assert(img);
-  assert(img->path);
-  SDL_Surface* loadedSurface = IMG_Load(img->path);
-  if (!loadedSurface)
-  {
-    fprintf(stderr, "Unable to load image '%s': %s\n", img->path, IMG_GetError());
-    return 0;
-  }
-  img->sfc = loadedSurface;
-  if (createTexture)
-  {
-    img->tex = SDL_CreateTextureFromSurface(renderer, img->sfc);
-    if (!img->tex)
-    {
-      fprintf(stderr, "Unable to create texture for image '%s': %s\n", img->path, SDL_GetError());
-      return 0;
-    }
-  }
-  return 1;
-}
-
-int InitImage()
-{
-  int imgFlags = IMG_INIT_PNG;
-  int imgInitResult = IMG_Init(imgFlags) & imgFlags;
-  if(!imgInitResult)
-  {
-    fprintf(stderr, "SDL_image init failed: %s\n", IMG_GetError() );
-    return 0;
-  }
-  return 1;
-}
-
 int IntLog2(int n)
 {
   if (n <= 0)
@@ -330,7 +291,7 @@ static int IntSqrt(int n)
 int UIntSqrt(unsigned n)
 {
   // Find the magnitude of n.
-  unsigned shiftBits = 2;
+  int shiftBits = 2;
   unsigned shifted = n >> shiftBits;
   while (shifted > 0)
   {

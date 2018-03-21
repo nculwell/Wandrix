@@ -155,7 +155,7 @@ TiledMap* TiledMap_Load(const char* filename)
   Sint16* tileGids = MallocOrDie(totalCellCount * sizeof(Sint16));
   if (!ReadInts16(rw, tileGids, totalCellCount)) return 0;
   TiledTile** tiles = MallocOrDie(totalCellCount * sizeof(TiledTile**));
-  for (int t=0; t < totalCellCount; ++t)
+  for (size_t t=0; t < totalCellCount; ++t)
   {
     int gid = tileGids[t];
     tiles[t] = TiledMap_FindTile(map, gid);

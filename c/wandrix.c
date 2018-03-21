@@ -233,6 +233,7 @@ int MainLoop()
   return 1;
 }
 
+#pragma GCC diagnostic ignored "-Wunused-parameter"
 int WandrixMain(int argc, char** argv)
 {
   printf("STARTED\n");

@@ -52,6 +52,7 @@ static void TestDistanceFunction(const char* functionName,
       (int)(endTime - startTime), mean,
       standardDeviation, meanDeviation,
       standardError, meanError);
+  fflush(stdout);
 }
 
 void TestDistanceFunctions()
@@ -76,6 +77,7 @@ void TestDistanceFunctions()
   TestDistanceFunction("Float", Coords_FloatDist);
 }
 
+#pragma GCC diagnostic ignored "-Wunused-parameter"
 int main(int argc, char** argv)
 {
   assert(RAND_MAX > RANDOM_RANGE);

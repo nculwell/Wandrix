@@ -2,6 +2,7 @@
 */
 
 #include "wandrix.h"
+#include <SDL_image.h>
 
 static const int FULLSCREEN = 1;
 
@@ -75,6 +76,41 @@ int InitDisplay(
   return 1;
 }
 
+int InitImage()
+{
+  int imgFlags = IMG_INIT_PNG;
+  int imgInitResult = IMG_Init(imgFlags) & imgFlags;
+  if(!imgInitResult)
+  {
+    fprintf(stderr, "SDL_image init failed: %s\n", IMG_GetError() );
+    return 0;
+  }
+  return 1;
+}
+
+int LoadImage(struct Image* img, int createTexture)
+{
+  assert(img);
+  assert(img->path);
+  SDL_Surface* loadedSurface = IMG_Load(img->path);
+  if (!loadedSurface)
+  {
+    fprintf(stderr, "Unable to load image '%s': %s\n", img->path, IMG_GetError());
+    return 0;
+  }
+  img->sfc = loadedSurface;
+  if (createTexture)
+  {
+    img->tex = SDL_CreateTextureFromSurface(display.renderer, img->sfc);
+    if (!img->tex)
+    {
+      fprintf(stderr, "Unable to create texture for image '%s': %s\n", img->path, SDL_GetError());
+      return 0;
+    }
+  }
+  return 1;
+}
+
 int DrawTextureWithOffset(SDL_Rect* mapViewRect, SDL_Texture* texture,
     SDL_Rect* textureRect, int textureOffsetX, int textureOffsetY)
 {
@@ -114,8 +150,13 @@ static void ComputeVisibleCoords(int* resultFirstVisible, int* resultNVisible,
   if (firstVisible * tileSize > intersectEdge)
     --firstVisible;
   int nVisible = intersectSize / tileSize;
+  int maxVisible = nTiles - firstVisible; // number of tiles before end of map
+  // might need to add one or two depending on how the intersection lines up
   while ((firstVisible + nVisible) * tileSize < intersectEdge + intersectSize)
     ++nVisible;
+  // check if we went off the edge of the map
+  if (nVisible > maxVisible)
+    nVisible = maxVisible;
   *resultFirstVisible = firstVisible;
   *resultNVisible = nVisible;
 }
