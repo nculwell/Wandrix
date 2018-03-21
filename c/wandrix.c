@@ -154,12 +154,15 @@ void UpdateLogic()
   keypresses = 0;
 }
 
+int printLight = 1;
+
 void HandleKeypress(SDL_Event* e)
 {
   switch (e->key.keysym.sym)
   {
     case SDLK_q: quitting = 1; break;
     case SDLK_p: printf("PLAYER: (%d,%d)\n", player.c.pos.x, player.c.pos.y); break;
+    case SDLK_l: printLight = 1; break;
     case SDLK_UP: keypresses |= KEY_UP; break;
     case SDLK_DOWN: keypresses |= KEY_DOWN; break;
     case SDLK_LEFT: keypresses |= KEY_LEFT; break;

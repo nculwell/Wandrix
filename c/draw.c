@@ -163,6 +163,8 @@ static void ComputeVisibleCoords(int* resultFirstVisible, int* resultNVisible,
   *resultNVisible = nVisible;
 }
 
+extern int printLight;
+
 void TiledMap_Draw(TiledMap* map, SDL_Rect* mapViewRect)
 {
   Coords mapViewCenter = {
@@ -209,14 +211,23 @@ void TiledMap_Draw(TiledMap* map, SDL_Rect* mapViewRect)
       }
       // light level
       {
-        int luminosity = 32169900;
-        int dx = mapViewCenter.x - (tileRect.x + tileRect.w / 2);
-        int dy = mapViewCenter.y - (tileRect.y + tileRect.h / 2);
-        int distanceSquared = dx * dx + dy * dy;
-        if (distanceSquared > 0)
+        //int luminosity = 32169900;
+        int distance;
         {
-          int brightness = (int)(luminosity*(1<<10) / (4 * (int)(PI*(1<<10)) * distanceSquared));
+          int dx = mapViewCenter.x - tileRect.x;
+          int dy = mapViewCenter.y - tileRect.y;
+          int distanceSquared = dx * dx + dy * dy;
+          distance = (int)sqrt(distanceSquared);
+        }
+        if (distance > tileRect.w)
+        {
+          int maxViewDist = 10;
+          int dropoffDist = 6;
+          int slope = 256 / (maxViewDist - dropoffDist);
+          int brightness = (255 + slope * dropoffDist) - (slope * distance / map->tileWidth);
           if (brightness < 0) brightness = 0;
+          //if (printLight)
+          //  printf("%02x ", brightness);
           if (brightness < 255)
           {
             // These both return 0 on success and negative on error.
@@ -225,21 +236,22 @@ void TiledMap_Draw(TiledMap* map, SDL_Rect* mapViewRect)
               tileRect.x - mapViewRect->x,
               tileRect.y - mapViewRect->y,
               tileRect.w, tileRect.h };
-            SDL_Rect irect;
-            if (SDL_IntersectRect(mapViewRect, &rect, &irect))
-              SDL_RenderFillRect(display.renderer, &irect);
+            SDL_RenderFillRect(display.renderer, &rect);
           }
         }
       }
     }
   }
+  printLight = 0;
 }
 
 void DrawChar(SDL_Rect* mapViewRect, struct CharBase* c, int phase)
 {
   int dx = c->mov.x * phase / PHASE_GRAIN,
       dy = c->mov.y * phase / PHASE_GRAIN;
-  SDL_Rect charRect = { c->pos.x + dx, c->pos.y + dy, c->img.sfc->w, c->img.sfc->h };
+  SDL_Rect charRect = {
+    c->pos.x + dx, c->pos.y + dy,
+    c->img.sfc->w, c->img.sfc->h };
   DrawTexture(mapViewRect, c->img.tex, &charRect);
 }
 
