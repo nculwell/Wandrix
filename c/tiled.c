@@ -80,7 +80,6 @@ static TiledTileset* LoadTileset(const char* filename, int tileWidth, int tileHe
   TiledTileset* tileset = &loadedTilesets[nLoadedTilesets];
   ++nLoadedTilesets;
   TiledTilesetInput input;
-  //printf("Input size: %I64u, %I64u, %I64u\n", sizeof(input), sizeof(Sint32), sizeof(input) / sizeof(Sint32));
   ReadInts32(rw, (Sint32*)&input, sizeof(input) / sizeof(Sint32));
   tileset->tileCount = input.tileCount;
   tileset->columns = input.columns;

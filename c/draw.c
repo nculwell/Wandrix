@@ -193,7 +193,6 @@ void TiledMap_Draw(TiledMap* map, SDL_Rect* mapViewRect)
   ComputeVisibleCoords(&firstVisibleCol, &nVisibleCols,
       map->width, map->tileWidth, intersectRect.x, intersectRect.w);
   SDL_Rect tileRect = { 0, 0,  map->tileWidth, map->tileHeight };
-  //TiledTile* tile = &map->layers->tiles[0];
   int nTilesInRow = map->nLayers * map->width;
   int firstTileOffset = nTilesInRow * firstVisibleRow + map->nLayers * firstVisibleCol;
   //printf("nTilesInRow=%d, firstTileOffset=%d\n", nTilesInRow, firstTileOffset);
@@ -243,7 +242,6 @@ void TiledMap_Draw(TiledMap* map, SDL_Rect* mapViewRect)
         {
           if (*tile)
           {
-            //printf("Tile ID: %d  Prop1: %d, Prop2: %d\n", (*tile)->id, (*tile)->props[0], (*tile)->props[1]);
             DrawTextureWithOffset(mapViewRect,
                 (*tile)->tex, &tileRect, (*tile)->x, (*tile)->y);
             TiledProperty tileOpacity = (*tile)->props[TILE_PROP_OPACITY];
