@@ -24,7 +24,10 @@ static int quitting = 0;
 TiledMap* tiledMap = 0;
 
 struct Player player = {
-  { .name = "Player", .img = { .path = "testimg/fork32.png" }, .pos = {0,0}, }
+  { .name = "Player", .img = { .path = "testimg/fork32.png" },
+    .pos = {1000, 600},
+    //.pos = {0,0},
+  }
 };
 
 struct Npc npcs[NPC_COUNT] = {
@@ -156,6 +159,7 @@ void HandleKeypress(SDL_Event* e)
   switch (e->key.keysym.sym)
   {
     case SDLK_q: quitting = 1; break;
+    case SDLK_p: printf("PLAYER: (%d,%d)\n", player.c.pos.x, player.c.pos.y); break;
     case SDLK_UP: keypresses |= KEY_UP; break;
     case SDLK_DOWN: keypresses |= KEY_DOWN; break;
     case SDLK_LEFT: keypresses |= KEY_LEFT; break;

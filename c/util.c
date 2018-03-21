@@ -263,6 +263,7 @@ int IntLog2(int n)
 
 static int IntSqrt(int n)
 {
+  // TODO: Find a faster way to do this.
   assert(n >= 0);
   if (n == 0) return 0;
   // Find the highest power of four <= n.

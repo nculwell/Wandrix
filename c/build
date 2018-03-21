@@ -5,6 +5,8 @@ LINKFLAGS="$(pkg-config --libs sdl2 SDL2_image)"
 CFILES="util.c wandrix.c tiled.c draw.c"
 gcc -o wand $CFLAGS -g $CFILES gamemain.c $LINKFLAGS \
   || exit $?
-gcc -o utiltest $CFLAGS -O3 $CFILES utiltest.c $LINKFLAGS \
-  || exit $?
+if [ "$1" == "all" ]; then
+  gcc -o utiltest $CFLAGS -O3 $CFILES utiltest.c $LINKFLAGS \
+    || exit $?
+fi
 

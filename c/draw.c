@@ -4,6 +4,8 @@
 #include "wandrix.h"
 #include <SDL_image.h>
 
+const double PI = 3.14159265358979323846264338327950288;
+
 static const int FULLSCREEN = 1;
 
 struct Display {
@@ -163,6 +165,8 @@ static void ComputeVisibleCoords(int* resultFirstVisible, int* resultNVisible,
 
 void TiledMap_Draw(TiledMap* map, SDL_Rect* mapViewRect)
 {
+  Coords mapViewCenter = {
+    mapViewRect->x + display.center.x, mapViewRect->y + display.center.y };
   int mapWidthPixels = map->width * map->tileWidth;
   int mapHeightPixels = map->height * map->tileHeight;
   SDL_Rect wholeMapRect = { 0, 0, mapWidthPixels, mapHeightPixels };
@@ -203,6 +207,30 @@ void TiledMap_Draw(TiledMap* map, SDL_Rect* mapViewRect)
         }
         ++tile;
       }
+      // light level
+      {
+        int luminosity = 32169900;
+        int dx = mapViewCenter.x - (tileRect.x + tileRect.w / 2);
+        int dy = mapViewCenter.y - (tileRect.y + tileRect.h / 2);
+        int distanceSquared = dx * dx + dy * dy;
+        if (distanceSquared > 0)
+        {
+          int brightness = (int)(luminosity*(1<<10) / (4 * (int)(PI*(1<<10)) * distanceSquared));
+          if (brightness < 0) brightness = 0;
+          if (brightness < 255)
+          {
+            // These both return 0 on success and negative on error.
+            SDL_SetRenderDrawColor(display.renderer, 0, 0, 0, 255 - brightness);
+            SDL_Rect rect = {
+              tileRect.x - mapViewRect->x,
+              tileRect.y - mapViewRect->y,
+              tileRect.w, tileRect.h };
+            SDL_Rect irect;
+            if (SDL_IntersectRect(mapViewRect, &rect, &irect))
+              SDL_RenderFillRect(display.renderer, &irect);
+          }
+        }
+      }
     }
   }
 }
@@ -231,6 +259,7 @@ void Draw(int phase, TiledMap* map, struct Player* player, struct Npc* npcs, int
 {
   SDL_SetRenderDrawColor(display.renderer, 0x40, 0x40, 0x40, 0xFF);
   SDL_RenderClear(display.renderer);
+  SDL_SetRenderDrawBlendMode(display.renderer, SDL_BLENDMODE_BLEND);
   SDL_SetRenderDrawColor(display.renderer, 0xFF, 0xFF, 0xFF, 0xFF);
   SDL_Rect mapViewRect = {
     player->c.pos.x - display.center.x + player->c.mov.x * phase / PHASE_GRAIN,
