@@ -237,14 +237,29 @@ void TiledMap_Draw(TiledMap* map, SDL_Rect* mapViewRect)
       }
       else
       {
-        for (int layer=0; layer < map->nLayers; ++layer)
+        for (int layer=0;
+            layer < map->nLayers;
+            ++layer, ++tile)
         {
           if (*tile)
           {
+            //printf("Tile ID: %d  Prop1: %d, Prop2: %d\n", (*tile)->id, (*tile)->props[0], (*tile)->props[1]);
             DrawTextureWithOffset(mapViewRect,
                 (*tile)->tex, &tileRect, (*tile)->x, (*tile)->y);
+            TiledProperty tileOpacity = (*tile)->props[TILE_PROP_OPACITY];
+            switch (tileOpacity)
+            {
+              case 0: break;
+              case 1: brightness -= brightness >> 3; break;
+              case 2: brightness -= brightness >> 2; break;
+              case 3: brightness >>= 2; break;
+              case 4: brightness >>= 3; break;
+              case 5: brightness >>= 4; break;
+              case 6: brightness >>= 5; break;
+              case 7: brightness = 0; break;
+              default: fprintf(stderr, "Invalid opacity level: %d\n", tileOpacity); break;
+            }
           }
-          ++tile;
         }
         if (brightness < 255)
         {

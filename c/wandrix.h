@@ -34,8 +34,14 @@ struct IntGrid {
   Sint16* cells;
 };
 
-typedef Sint8* TiledProperty;
+enum {
+  TILE_PROP_OPACITY = 0,
+  TILE_PROP_OBSTACLE
+};
+
+typedef Sint8 TiledProperty;
 typedef struct TiledTile {
+  int id;
   int x, y;
   SDL_Texture* tex;
   TiledProperty* props;

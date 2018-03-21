@@ -104,10 +104,18 @@ static TiledTileset* LoadTileset(const char* filename, int tileWidth, int tileHe
   for (int t=0; t < input.tileCount; ++t, propertiesOffset += input.nProperties)
   {
     TiledTile* tile = &tileset->tiles[t];
+    tile->id = t;
     tile->x = x;
     tile->y = y;
     tile->tex = tileset->image.tex;
     tile->props = &tileset->tileProperties[propertiesOffset];
+    printf("TILE PROPERTIES %d: ", t);
+    for (int p=0; p < input.nProperties; ++p)
+    {
+      TiledProperty prop = tile->props[p];
+      printf(" PROP%d=%d", p+1, prop);
+    }
+    printf("\n");
     ++column;
     if (column == tileset->columns)
     {
@@ -135,7 +143,7 @@ static int LoadTilesetRef(SDL_RWops* rw, TiledTilesetRef* tilesetRef,
   char filename[filenameLength + 1];
   RWread(rw, filename, 1, filenameLength);
   filename[filenameLength] = '\0';
-  printf("TS filename length: %I64d/%d\n", strlen(filename), filenameLength);
+  //printf("TS filename length: %I64d/%d\n", strlen(filename), filenameLength);
   tilesetRef->tileset = LoadTileset(filename, tileWidth, tileHeight);
   if (!tilesetRef->tileset) return 0;
   return 1;
@@ -150,7 +158,7 @@ static TiledTile* TiledMap_FindTile(TiledMap* map, Sint16 gid)
     TiledTilesetRef* ref = &map->tilesetRefs[ts];
     TiledTileset* tileset = ref->tileset;
     int tileIndex = gid - ref->firstGid;
-    printf("%p\n", tileset); fflush(stdout);
+    //printf("%p\n", tileset); fflush(stdout);
     if (tileIndex < tileset->tileCount)
     {
       TiledTile* tile = &tileset->tiles[tileIndex];

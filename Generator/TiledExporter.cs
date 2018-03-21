@@ -93,11 +93,10 @@ namespace Generator
                     w.Write(ts.Columns);
                     w.Write(TiledTileset.TileProps.PropertyCount);
                     w.Write(FILENAME_LENGTH_LIMIT, ts.ImageFilename);
-                    // Notice that tile numbering starts at 1.
                     w.Write(Encoding.ASCII.GetBytes("PROP"));
-                    for (int t = 1; t <= ts.TileCount; ++t)
+                    for (int t = 0; t < ts.TileCount; ++t)
                     {
-                        var props = ts.GetTileProperties(t + 1);
+                        var props = ts.GetTileProperties(t);
                         w.Write(props.Pack());
                     }
                 }
@@ -209,7 +208,6 @@ namespace Generator
                     {
                         // Fill in default properties.
                         var propNames = DefaultProps.Keys.ToList();
-                        propNames.Sort();
                         foreach (var propName in propNames)
                             if (!Props.ContainsKey(propName))
                                 Props[propName] = DefaultProps[propName];
