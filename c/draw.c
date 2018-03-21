@@ -340,8 +340,8 @@ void DrawLayout(SDL_Rect* mapDisplayRect, SDL_Rect* uiDisplayRect)
   SDL_Rect uiDisplayRectValue = {
     isHorizontal ? uiDisplayShift : BORDER_THICKNESS,
     isHorizontal ? BORDER_THICKNESS : uiDisplayShift,
-    isHorizontal ? display.screen->w - uiDisplayShift - BORDER_THICKNESS : display.screen->w,
-    isHorizontal ? display.screen->h : display.screen->h - uiDisplayShift - BORDER_THICKNESS,
+    isHorizontal ? display.screen->w - uiDisplayShift - BORDER_THICKNESS : display.screen->w - 2 * BORDER_THICKNESS,
+    isHorizontal ? display.screen->h - 2 * BORDER_THICKNESS : display.screen->h - uiDisplayShift - 2 * BORDER_THICKNESS,
   };
   SDL_Rect divider = {
     isHorizontal ? BORDER_THICKNESS + mapViewSize           : BORDER_THICKNESS,
@@ -378,7 +378,6 @@ void DrawLayout(SDL_Rect* mapDisplayRect, SDL_Rect* uiDisplayRect)
   *uiDisplayRect = uiDisplayRectValue;
   // Draw frame.
   SetColor(COLOR_FRAME);
-  //SDL_RenderFillRect(display.renderer, uiDisplayRect);
   SDL_RenderFillRect(display.renderer, &borderTop);
   SDL_RenderFillRect(display.renderer, &borderBottom);
   SDL_RenderFillRect(display.renderer, &borderLeft);
@@ -406,7 +405,7 @@ void Draw(int phase, TiledMap* map, struct Player* player, struct Npc* npcs, int
   TiledMap_Draw(map, &mapViewRect);
   DrawPlayer(&mapViewRect, phase, player);
   DrawNpcs(&mapViewRect, phase, npcs, npcCount);
-  //DrawUi(&uiDisplayRect);
+  DrawUi(&uiDisplayRect);
   SDL_RenderPresent(display.renderer);
 }
 
