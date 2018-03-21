@@ -129,7 +129,7 @@ static TiledTile* TiledMap_FindTile(TiledMap* map, Sint16 gid)
     if (tileIndex < tileset->tileCount)
     {
       TiledTile* tile = &tileset->tiles[tileIndex];
-      printf("Found tile: %d (%d,%d)\n", tileIndex, tile->x, tile->y);
+      //printf("Found tile: %d (%d,%d)\n", tileIndex, tile->x, tile->y);
       return tile;
     }
   }

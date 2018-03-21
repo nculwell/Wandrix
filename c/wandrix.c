@@ -155,10 +155,11 @@ void UpdateLogic()
 }
 
 int printLight = 1;
+Coords click = { -1, -1 };
 
-void HandleKeypress(SDL_Event* e)
+void HandleKeypress(SDL_KeyboardEvent* e)
 {
-  switch (e->key.keysym.sym)
+  switch (e->keysym.sym)
   {
     case SDLK_q: quitting = 1; break;
     case SDLK_p: printf("PLAYER: (%d,%d)\n", player.c.pos.x, player.c.pos.y); break;
@@ -170,6 +171,15 @@ void HandleKeypress(SDL_Event* e)
   }
 }
 
+void HandleMouseClick(SDL_MouseButtonEvent* e)
+{
+  if (e->button == SDL_BUTTON_LEFT)
+  {
+    click.x = e->x;
+    click.y = e->y;
+  }
+}
+
 void PollEvents()
 {
   SDL_Event e;
@@ -178,7 +188,9 @@ void PollEvents()
     if (e.type == SDL_QUIT)
       quitting = 1;
     if (e.type == SDL_KEYDOWN)
-      HandleKeypress(&e);
+      HandleKeypress(&e.key);
+    if (e.type == SDL_MOUSEBUTTONDOWN)
+      HandleMouseClick(&e.button);
   }
 }
 

@@ -6,6 +6,17 @@
 
 const double PI = 3.14159265358979323846264338327950288;
 
+// Distance (in tiles) where light fades to zero.
+// This is the limit of visibility in unobstructed terrain.
+static const int VIEW_END_DISTANCE = 10;
+// Distance (in tiles) where light level starts to fade out.
+static const int VIEW_DROPOFF_DISTANCE = 6;
+// Light levels below this threshold are rounded down to zero.
+// (There are two reasons to do this. One is to optimize away drawing
+// of tiles that are so dim that there's probably no point in drawing them.
+// The other is to put a hard limit on visibility through semi-opaque terrain.)
+static const int VIEW_LIGHT_THRESHOLD = 0x20;
+// Determines whether game displays fullscreen. TODO: Make configurable.
 static const int FULLSCREEN = 1;
 
 struct Display {
@@ -167,6 +178,7 @@ extern int printLight;
 
 void TiledMap_Draw(TiledMap* map, SDL_Rect* mapViewRect)
 {
+  // TODO: Draw some default tile for areas off the map edge.
   Coords mapViewCenter = {
     mapViewRect->x + display.center.x, mapViewRect->y + display.center.y };
   int mapWidthPixels = map->width * map->tileWidth;
@@ -180,7 +192,6 @@ void TiledMap_Draw(TiledMap* map, SDL_Rect* mapViewRect)
       map->height, map->tileHeight, intersectRect.y, intersectRect.h);
   ComputeVisibleCoords(&firstVisibleCol, &nVisibleCols,
       map->width, map->tileWidth, intersectRect.x, intersectRect.w);
-  // TODO: Only iterate over visible tiles.
   SDL_Rect tileRect = { 0, 0,  map->tileWidth, map->tileHeight };
   //TiledTile* tile = &map->layers->tiles[0];
   int nTilesInRow = map->nLayers * map->width;
@@ -200,18 +211,8 @@ void TiledMap_Draw(TiledMap* map, SDL_Rect* mapViewRect)
         c < firstVisibleCol + nVisibleCols;
         ++c, tileRect.x += map->tileWidth)
     {
-      for (int layer=0; layer < map->nLayers; ++layer)
+      int brightness = 255;
       {
-        if (*tile)
-        {
-          DrawTextureWithOffset(mapViewRect,
-              (*tile)->tex, &tileRect, (*tile)->x, (*tile)->y);
-        }
-        ++tile;
-      }
-      // light level
-      {
-        //int luminosity = 32169900;
         int distance;
         {
           int dx = mapViewCenter.x - tileRect.x;
@@ -219,25 +220,40 @@ void TiledMap_Draw(TiledMap* map, SDL_Rect* mapViewRect)
           int distanceSquared = dx * dx + dy * dy;
           distance = (int)sqrt(distanceSquared);
         }
-        if (distance > tileRect.w)
+        if (distance == 0)
         {
-          int maxViewDist = 10;
-          int dropoffDist = 6;
-          int slope = 256 / (maxViewDist - dropoffDist);
-          int brightness = (255 + slope * dropoffDist) - (slope * distance / map->tileWidth);
-          if (brightness < 0) brightness = 0;
-          //if (printLight)
-          //  printf("%02x ", brightness);
-          if (brightness < 255)
+          brightness = INT_MAX;
+        }
+        else
+        {
+          int slope = 256 / (VIEW_END_DISTANCE - VIEW_DROPOFF_DISTANCE);
+          brightness = (255 + slope * VIEW_DROPOFF_DISTANCE) - (slope * distance / map->tileWidth);
+        }
+      }
+      if (brightness <= VIEW_LIGHT_THRESHOLD)
+      {
+        // Skip over tiles for this cell without drawing them.
+        tile += map->nLayers;
+      }
+      else
+      {
+        for (int layer=0; layer < map->nLayers; ++layer)
+        {
+          if (*tile)
           {
-            // These both return 0 on success and negative on error.
-            SDL_SetRenderDrawColor(display.renderer, 0, 0, 0, 255 - brightness);
-            SDL_Rect rect = {
-              tileRect.x - mapViewRect->x,
-              tileRect.y - mapViewRect->y,
-              tileRect.w, tileRect.h };
-            SDL_RenderFillRect(display.renderer, &rect);
+            DrawTextureWithOffset(mapViewRect,
+                (*tile)->tex, &tileRect, (*tile)->x, (*tile)->y);
           }
+          ++tile;
+        }
+        if (brightness < 255)
+        {
+          // These both return 0 on success and negative on error.
+          SDL_SetRenderDrawColor(display.renderer, 0, 0, 0, 255 - brightness);
+          SDL_Rect rect = {
+            tileRect.x - mapViewRect->x, tileRect.y - mapViewRect->y,
+            tileRect.w, tileRect.h };
+          SDL_RenderFillRect(display.renderer, &rect);
         }
       }
     }
@@ -269,7 +285,7 @@ void DrawNpcs(SDL_Rect* mapViewRect, int phase, struct Npc* npcs, int npcCount)
 
 void Draw(int phase, TiledMap* map, struct Player* player, struct Npc* npcs, int npcCount)
 {
-  SDL_SetRenderDrawColor(display.renderer, 0x40, 0x40, 0x40, 0xFF);
+  SDL_SetRenderDrawColor(display.renderer, 0x00, 0x00, 0x00, 0xFF);
   SDL_RenderClear(display.renderer);
   SDL_SetRenderDrawBlendMode(display.renderer, SDL_BLENDMODE_BLEND);
   SDL_SetRenderDrawColor(display.renderer, 0xFF, 0xFF, 0xFF, 0xFF);
