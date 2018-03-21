@@ -265,7 +265,6 @@ static int IntSqrt(int n)
 {
   assert(n >= 0);
   if (n == 0) return 0;
-  if (n < 4) return 1;
   // Find the highest power of four <= n.
   // Start with the high bit and shift down.
   int bit = 1 << (sizeof(int) * 8 - 2);
@@ -285,30 +284,6 @@ static int IntSqrt(int n)
     }
     bit >>= 2;
   }
-  return result;
-}
-
-int UIntSqrt(unsigned n)
-{
-  // Find the magnitude of n.
-  int shiftBits = 2;
-  unsigned shifted = n >> shiftBits;
-  while (shifted > 0)
-  {
-    shiftBits += 2;
-    shifted >>= 2;
-  }
-  shiftBits -= 2;
-  // Find digits of result.
-  unsigned result = 0;
-  do {
-    result <<= 1;
-    unsigned candidateResult = result + 1;
-    unsigned candidateResultSquared = candidateResult * candidateResult;
-    if (candidateResultSquared == n >> shiftBits)
-      result = candidateResult;
-    shiftBits -= 2;
-  } while (shiftBits >= 0);
   return result;
 }
 
