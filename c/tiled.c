@@ -40,8 +40,21 @@ int ReadInts16(SDL_RWops* rw, Sint16* buf, size_t n)
   return 1;
 }
 
+int Read4CharMarker(SDL_RWops* rw, const char* marker)
+{
+  assert(strlen(marker) == 4);
+  char markerBuf[5] = { 0 };
+  if (!RWread(rw, markerBuf, 1, 4)) return 0;
+  if (0 != strcmp(marker, markerBuf))
+  {
+    fprintf(stderr, "Expected marker '%s' not found in file.\n", marker);
+    return 0;
+  }
+  return 1;
+}
+
 typedef struct TiledTilesetInput {
-  Sint32 imageWidth, imageHeight, tileCount, columns, imageFilenameLength;
+  Sint32 imageWidth, imageHeight, tileCount, columns, nProperties, imageFilenameLength;
 } TiledTilesetInput;
 
 #define MAX_LOADED_TILESETS 16
@@ -67,7 +80,8 @@ static TiledTileset* LoadTileset(const char* filename, int tileWidth, int tileHe
   TiledTileset* tileset = &loadedTilesets[nLoadedTilesets];
   ++nLoadedTilesets;
   TiledTilesetInput input;
-  ReadInts32(rw, (Sint32*)&input, 5);
+  //printf("Input size: %I64u, %I64u, %I64u\n", sizeof(input), sizeof(Sint32), sizeof(input) / sizeof(Sint32));
+  ReadInts32(rw, (Sint32*)&input, sizeof(input) / sizeof(Sint32));
   tileset->tileCount = input.tileCount;
   tileset->columns = input.columns;
   char* filenameCopy = MallocOrDie(strlen(filename) + 1);
@@ -79,14 +93,21 @@ static TiledTileset* LoadTileset(const char* filename, int tileWidth, int tileHe
   strcpy(imagePath, imageFilename);
   tileset->image.path = imagePath;
   if (!LoadImage(&tileset->image, 1)) return 0;
+  // Build tile objects.
   tileset->tiles = MallocOrDie(input.tileCount * sizeof(TiledTile));
-  int column=0, x=0, y=0;
-  for (int t=0; t < input.tileCount; ++t)
+  if (!Read4CharMarker(rw, "PROP")) return 0;
+  tileset->nProperties = input.nProperties;
+  int propertiesBufLen = input.tileCount * input.nProperties;
+  tileset->tileProperties = MallocOrDie(propertiesBufLen * sizeof(*tileset->tileProperties));
+  if (!RWread(rw, tileset->tileProperties, 1, propertiesBufLen)) return 0;
+  int column=0, x=0, y=0, propertiesOffset=0;
+  for (int t=0; t < input.tileCount; ++t, propertiesOffset += input.nProperties)
   {
     TiledTile* tile = &tileset->tiles[t];
     tile->x = x;
     tile->y = y;
     tile->tex = tileset->image.tex;
+    tile->props = &tileset->tileProperties[propertiesOffset];
     ++column;
     if (column == tileset->columns)
     {
@@ -99,10 +120,11 @@ static TiledTileset* LoadTileset(const char* filename, int tileWidth, int tileHe
       x += tileWidth;
     }
   }
+  // TODO: Check that we're at the end of the file.
   return tileset;
 }
 
-static void LoadTilesetRef(SDL_RWops* rw, TiledTilesetRef* tilesetRef,
+static int LoadTilesetRef(SDL_RWops* rw, TiledTilesetRef* tilesetRef,
     Sint32 tileWidth, Sint32 tileHeight)
 {
   ReadInts32(rw, (Sint32*)tilesetRef, 1);
@@ -115,6 +137,8 @@ static void LoadTilesetRef(SDL_RWops* rw, TiledTilesetRef* tilesetRef,
   filename[filenameLength] = '\0';
   printf("TS filename length: %I64d/%d\n", strlen(filename), filenameLength);
   tilesetRef->tileset = LoadTileset(filename, tileWidth, tileHeight);
+  if (!tilesetRef->tileset) return 0;
+  return 1;
 }
 
 static TiledTile* TiledMap_FindTile(TiledMap* map, Sint16 gid)
@@ -126,6 +150,7 @@ static TiledTile* TiledMap_FindTile(TiledMap* map, Sint16 gid)
     TiledTilesetRef* ref = &map->tilesetRefs[ts];
     TiledTileset* tileset = ref->tileset;
     int tileIndex = gid - ref->firstGid;
+    printf("%p\n", tileset); fflush(stdout);
     if (tileIndex < tileset->tileCount)
     {
       TiledTile* tile = &tileset->tiles[tileIndex];
@@ -149,7 +174,8 @@ TiledMap* TiledMap_Load(const char* filename)
       map->tileWidth, map->tileHeight, map->nTilesets, map->nLayers);
   map->tilesetRefs = MallocOrDie(map->nTilesets * sizeof(TiledTilesetRef));
   for (int i=0; i < map->nTilesets; ++i)
-    LoadTilesetRef(rw, &map->tilesetRefs[i], map->tileWidth, map->tileHeight);
+    if (!LoadTilesetRef(rw, &map->tilesetRefs[i], map->tileWidth, map->tileHeight))
+      return 0;
   size_t singleLayerCellCount = map->width * map->height;
   size_t totalCellCount = map->nLayers * singleLayerCellCount;
   Sint16* tileGids = MallocOrDie(totalCellCount * sizeof(Sint16));

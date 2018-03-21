@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.Text;
 using System.Linq;
 using System.Net;
@@ -30,14 +31,15 @@ namespace Generator
             tilemapDoc.Load(tiledMapFilename);
             var mapElt = tilemapDoc.DocumentElement;
             RequireAttributeValue(mapElt, "orientation", "orthogonal");
-            // TODO: Support other render orders.
+            // TODO: Support other render orders. (We will always output right-down order,
+            // so the generator just needs to iterate diferently while writing tiles.)
             RequireAttributeValue(mapElt, "renderorder", "right-down");
             int width = GetIntAttribute(mapElt, "width");
             int height = GetIntAttribute(mapElt, "height");
             int tileWidth = GetIntAttribute(mapElt, "tilewidth");
             int tileHeight = GetIntAttribute(mapElt, "tileheight");
             var tilesetElements = mapElt.SelectNodes("tileset");
-            var tilesets = MapElements(tilesetElements, e => TiledTileset.Parse(e, tileWidth, tileHeight));
+            var tilesets = MapElements(tilesetElements, e => TiledTileset.ParseRef(e, tileWidth, tileHeight));
             var layerElements = mapElt.SelectNodes("layer");
             var layers = MapElements(layerElements, e => TiledLayer.Parse(e, width, height));
             var objectGroupElements = mapElt.SelectNodes("objectgroup");
@@ -89,7 +91,15 @@ namespace Generator
                     w.Write(ts.ImageHeight);
                     w.Write(ts.TileCount);
                     w.Write(ts.Columns);
+                    w.Write(TiledTileset.TileProps.PropertyCount);
                     w.Write(FILENAME_LENGTH_LIMIT, ts.ImageFilename);
+                    // Notice that tile numbering starts at 1.
+                    w.Write(Encoding.ASCII.GetBytes("PROP"));
+                    for (int t = 1; t <= ts.TileCount; ++t)
+                    {
+                        var props = ts.GetTileProperties(t + 1);
+                        w.Write(props.Pack());
+                    }
                 }
             }
         }
@@ -119,8 +129,10 @@ namespace Generator
             public int ImageHeight { get; private set; }
             public int TileCount { get; private set; }
             public int Columns { get; private set; }
+            public Dictionary<int, TileProps> TileProperties { get; private set; }
             private TiledTileset() { }
-            public static TiledTileset Parse(XmlElement tilesetElement, int expectedTileWidth, int expectedTileHeight)
+            public static TiledTileset ParseRef(
+                XmlElement tilesetElement, int expectedTileWidth, int expectedTileHeight)
             {
                 if (tilesetElement.Name != "tileset")
                     throw new ArgumentException("Element is not a tileset: " + tilesetElement.Name);
@@ -128,20 +140,22 @@ namespace Generator
                 int firstGid = GetIntAttribute(tilesetElement, "firstgid");
                 return ParseDoc(source, firstGid, expectedTileWidth, expectedTileHeight);
             }
-            private static TiledTileset ParseDoc(string source, int firstGid, int expectedTileWidth, int expectedTileHeight)
+            private static TiledTileset ParseDoc(
+                string source, int firstGid, int expectedTileWidth, int expectedTileHeight)
             {
                 // TODO: Tile properties.
                 var tilesetDoc = new XmlDocument();
                 tilesetDoc.Load(source);
-                var tilesetRoot = tilesetDoc.DocumentElement;
+                XmlElement tilesetRoot = tilesetDoc.DocumentElement;
                 RequireAttributeValue(tilesetRoot, "tilewidth", expectedTileWidth.ToString());
                 RequireAttributeValue(tilesetRoot, "tileheight", expectedTileHeight.ToString());
                 int tileCount = GetIntAttribute(tilesetRoot, "tilecount");
                 int columns = GetIntAttribute(tilesetRoot, "columns");
-                var imageElt = (XmlElement)tilesetRoot.SelectSingleNode("image");
+                XmlElement imageElt = (XmlElement)tilesetRoot.SelectSingleNode("image");
                 string imageSource = imageElt.Attributes["source"].Value;
                 int imageWidth = GetIntAttribute(imageElt, "width");
                 int imageHeight = GetIntAttribute(imageElt, "height");
+                var tileProps = MapElements(tilesetRoot.SelectNodes("tile"), TileProps.Parse);
                 return new TiledTileset()
                 {
                     FirstGid = firstGid,
@@ -151,9 +165,62 @@ namespace Generator
                     ImageFilename = imageSource,
                     ImageWidth = imageWidth,
                     ImageHeight = imageHeight,
+                    TileProperties = tileProps.ToDictionary(tp => tp.Id),
                 };
             }
-            public void SaveText(System.IO.TextWriter w)
+            public TileProps GetTileProperties(int t)
+            {
+                var ps = TileProperties.GetValueOrDefault(t, TileProps.Default);
+                return ps;
+            }
+            public class TileProps
+            {
+                const int MaxOpacityLevel = 7;
+                public int Id;
+                Dictionary<string, string> Props;
+                public static int PropertyCount { get { return DefaultProps.Count(); } }
+                static Dictionary<string, string> DefaultProps =
+                    new Dictionary<string, string>()
+                    {
+                        { "OPACITY", "0" },
+                        { "OBSTACLE", "NONE" },
+                    };
+                static Dictionary<string, byte> Obstacles =
+                    new Dictionary<string, byte>()
+                    {
+                        { "NONE", 0 },
+                        { "WALL", 1 },
+                        { "WATER", 2 },
+                    };
+                private TileProps() { Props = DefaultProps; }
+                private TileProps(XmlElement tileElement)
+                {
+                    Id = GetIntAttribute(tileElement, "id");
+                    var props = ParseProperties(tileElement);
+                    Props = props.ToDictionary(
+                        pair => pair.Key.ToUpperInvariant(),
+                        pair => pair.Value.ToUpperInvariant());
+                }
+                public static TileProps Parse(XmlElement tileElement) { return new TileProps(tileElement); }
+                public static TileProps Default { get { return new TileProps(); } }
+                public byte[] Pack()
+                {
+                    checked
+                    {
+                        // Fill in default properties.
+                        var propNames = DefaultProps.Keys.ToList();
+                        propNames.Sort();
+                        foreach (var propName in propNames)
+                            if (!Props.ContainsKey(propName))
+                                Props[propName] = DefaultProps[propName];
+                        var packed = new List<byte>();
+                        packed.Add((byte)(MaxOpacityLevel * Double.Parse(Props["OPACITY"])));
+                        packed.Add(Obstacles[Props["OBSTACLE"]]);
+                        return packed.ToArray();
+                    }
+                }
+            }
+            public void SaveText(TextWriter w)
             {
                 w.WriteLine("TiledTileset");
                 w.WriteLine(DateTime.UtcNow.ToString("o"));
@@ -247,14 +314,7 @@ namespace Generator
                 int y = GetIntAttribute(objElt, "y") / tileHeight;
                 RequireAttributeValue(objElt, "width", tileWidth.ToString());
                 RequireAttributeValue(objElt, "height", tileHeight.ToString());
-                var properties = new Dictionary<string, string>();
-                var propertyElements = objElt.SelectNodes("properties/property");
-                foreach (XmlElement propElt in propertyElements)
-                {
-                    string propName = GetStrAttribute(propElt, "name");
-                    string propValue = GetStrAttribute(propElt, "value");
-                    properties.Add(propName, propValue);
-                }
+                var properties = ParseProperties(objElt);
                 return new TiledObject()
                 {
                     Id = id,
@@ -265,6 +325,20 @@ namespace Generator
                     Properties = properties,
                 };
             }
+        }
+
+        private static Dictionary<string, string> ParseProperties(
+            XmlElement parentElement, string propertyElementsXpath = "properties/property")
+        {
+            var properties = new Dictionary<string, string>();
+            var propertyElements = parentElement.SelectNodes(propertyElementsXpath);
+            foreach (XmlElement propElt in propertyElements)
+            {
+                string propName = GetStrAttribute(propElt, "name");
+                string propValue = GetStrAttribute(propElt, "value");
+                properties.Add(propName, propValue);
+            }
+            return properties;
         }
 
         private static IEnumerable<Tout> MapElements<Tout>(XmlNodeList elements, Func<XmlElement, Tout> function)

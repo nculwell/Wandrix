@@ -34,15 +34,18 @@ struct IntGrid {
   Sint16* cells;
 };
 
+typedef Sint8* TiledProperty;
 typedef struct TiledTile {
   int x, y;
   SDL_Texture* tex;
+  TiledProperty* props;
 } TiledTile;
 typedef struct TiledTileset {
-  Sint32 tileCount, columns;
+  Sint32 tileCount, columns, nProperties;
   struct Image image;
   char* sourceFilename;
   TiledTile* tiles;
+  TiledProperty* tileProperties;
 } TiledTileset;
 typedef struct TiledTilesetRef {
   Sint32 firstGid;
