@@ -227,9 +227,11 @@ void TiledMap_Draw(TiledMap* map, SDL_Rect* mapViewRect)
         {
           int slope = 256 / (VIEW_END_DISTANCE - VIEW_DROPOFF_DISTANCE);
           brightness = (255 + slope * VIEW_DROPOFF_DISTANCE) - (slope * distance / map->tileWidth);
+          if (brightness < VIEW_LIGHT_THRESHOLD)
+            brightness = 0;
         }
       }
-      if (brightness <= VIEW_LIGHT_THRESHOLD)
+      if (brightness == 0)
       {
         // Skip over tiles for this cell without drawing them.
         tile += map->nLayers;

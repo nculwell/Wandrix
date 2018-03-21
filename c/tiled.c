@@ -3,7 +3,7 @@
 
 const int MAX_INPUT_LENGTH = 260;
 
-SDL_RWops* RWopenRead(const char* path)
+static SDL_RWops* RWopenRead(const char* path)
 {
   SDL_RWops* rw = SDL_RWFromFile(path, "rb");
   if (!rw)
@@ -11,7 +11,7 @@ SDL_RWops* RWopenRead(const char* path)
   return rw;
 }
 
-int RWread(struct SDL_RWops* rw, void* ptr, size_t size, size_t maxnum)
+static int RWread(struct SDL_RWops* rw, void* ptr, size_t size, size_t maxnum)
 {
   size_t nRead = SDL_RWread(rw, ptr, size, maxnum);
   if (0 == nRead)
@@ -22,7 +22,7 @@ int RWread(struct SDL_RWops* rw, void* ptr, size_t size, size_t maxnum)
   return 1;
 }
 
-int ReadInts32(SDL_RWops* rw, Sint32* buf, size_t n)
+static int ReadInts32(SDL_RWops* rw, Sint32* buf, size_t n)
 {
   if (!RWread(rw, buf, sizeof(Sint32), n)) return 0;
   if (SDL_BYTEORDER == SDL_LIL_ENDIAN)
@@ -31,7 +31,7 @@ int ReadInts32(SDL_RWops* rw, Sint32* buf, size_t n)
   return 1;
 }
 
-int ReadInts16(SDL_RWops* rw, Sint16* buf, size_t n)
+static int ReadInts16(SDL_RWops* rw, Sint16* buf, size_t n)
 {
   if (!RWread(rw, buf, sizeof(Sint16), n)) return 0;
   if (SDL_BYTEORDER == SDL_LIL_ENDIAN)
@@ -40,7 +40,7 @@ int ReadInts16(SDL_RWops* rw, Sint16* buf, size_t n)
   return 1;
 }
 
-int Read4CharMarker(SDL_RWops* rw, const char* marker)
+static int Read4CharMarker(SDL_RWops* rw, const char* marker)
 {
   assert(strlen(marker) == 4);
   char markerBuf[5] = { 0 };
