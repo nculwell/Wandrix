@@ -60,6 +60,14 @@ void DestroyDisplay()
   SDL_DestroyWindow(display.window);
 }
 
+SDL_Texture* SurfaceToTexture(SDL_Surface* surface)
+{
+  SDL_Texture* texture = SDL_CreateTextureFromSurface(display.renderer, surface);
+  if (!texture)
+    fprintf(stderr, "Unable to create texture from surface. %s\n", SDL_GetError());
+  return texture;
+}
+
 int InitDisplay(
     const char* windowName, int screenW, int screenH,
     int minFrameRateCap, int* frameRateCap)
@@ -197,6 +205,71 @@ static void ComputeVisibleCoords(int* resultFirstVisible, int* resultNVisible,
 
 extern int printLight;
 
+void DrawTile(TiledMap* map, TiledTile** tile, SDL_Rect* mapViewRect, Coords mapViewCenter, SDL_Rect tileRect)
+{
+  int brightness = 255;
+  {
+    int distance;
+    {
+      int dx = mapViewCenter.x - tileRect.x;
+      int dy = mapViewCenter.y - tileRect.y;
+      int distanceSquared = dx * dx + dy * dy;
+      distance = (int)sqrt(distanceSquared);
+    }
+    if (distance == 0)
+    {
+      brightness = INT_MAX;
+    }
+    else
+    {
+      int slope = 256 / (VIEW_END_DISTANCE - VIEW_DROPOFF_DISTANCE);
+      brightness = (255 + slope * VIEW_DROPOFF_DISTANCE) - (slope * distance / map->tileWidth);
+      if (brightness < VIEW_LIGHT_THRESHOLD)
+        brightness = 0;
+    }
+  }
+  if (brightness == 0)
+  {
+    // Skip over tiles for this cell without drawing them.
+    tile += map->nLayers;
+  }
+  else
+  {
+    for (int layer=0;
+        layer < map->nLayers;
+        ++layer, ++tile)
+    {
+      if (*tile)
+      {
+        DrawTextureWithOffset(mapViewRect,
+            (*tile)->tex, &tileRect, (*tile)->x, (*tile)->y);
+        TiledProperty tileOpacity = (*tile)->props[TILE_PROP_OPACITY];
+        switch (tileOpacity)
+        {
+          case 0: break;
+          case 1: brightness -= brightness >> 3; break;
+          case 2: brightness -= brightness >> 2; break;
+          case 3: brightness >>= 2; break;
+          case 4: brightness >>= 3; break;
+          case 5: brightness >>= 4; break;
+          case 6: brightness >>= 5; break;
+          case 7: brightness = 0; break;
+          default: fprintf(stderr, "Invalid opacity level: %d\n", tileOpacity); break;
+        }
+      }
+    }
+    if (brightness < 255)
+    {
+      // These both return 0 on success and negative on error.
+      SDL_SetRenderDrawColor(display.renderer, 0, 0, 0, 255 - brightness);
+      SDL_Rect rect = {
+        tileRect.x - mapViewRect->x, tileRect.y - mapViewRect->y,
+        tileRect.w, tileRect.h };
+      SDL_RenderFillRect(display.renderer, &rect);
+    }
+  }
+}
+
 void TiledMap_Draw(TiledMap* map, SDL_Rect* mapViewRect)
 {
   // TODO: Draw some default tile for areas off the map edge.
@@ -231,67 +304,8 @@ void TiledMap_Draw(TiledMap* map, SDL_Rect* mapViewRect)
         c < firstVisibleCol + nVisibleCols;
         ++c, tileRect.x += map->tileWidth)
     {
-      int brightness = 255;
-      {
-        int distance;
-        {
-          int dx = mapViewCenter.x - tileRect.x;
-          int dy = mapViewCenter.y - tileRect.y;
-          int distanceSquared = dx * dx + dy * dy;
-          distance = (int)sqrt(distanceSquared);
-        }
-        if (distance == 0)
-        {
-          brightness = INT_MAX;
-        }
-        else
-        {
-          int slope = 256 / (VIEW_END_DISTANCE - VIEW_DROPOFF_DISTANCE);
-          brightness = (255 + slope * VIEW_DROPOFF_DISTANCE) - (slope * distance / map->tileWidth);
-          if (brightness < VIEW_LIGHT_THRESHOLD)
-            brightness = 0;
-        }
-      }
-      if (brightness == 0)
-      {
-        // Skip over tiles for this cell without drawing them.
-        tile += map->nLayers;
-      }
-      else
-      {
-        for (int layer=0;
-            layer < map->nLayers;
-            ++layer, ++tile)
-        {
-          if (*tile)
-          {
-            DrawTextureWithOffset(mapViewRect,
-                (*tile)->tex, &tileRect, (*tile)->x, (*tile)->y);
-            TiledProperty tileOpacity = (*tile)->props[TILE_PROP_OPACITY];
-            switch (tileOpacity)
-            {
-              case 0: break;
-              case 1: brightness -= brightness >> 3; break;
-              case 2: brightness -= brightness >> 2; break;
-              case 3: brightness >>= 2; break;
-              case 4: brightness >>= 3; break;
-              case 5: brightness >>= 4; break;
-              case 6: brightness >>= 5; break;
-              case 7: brightness = 0; break;
-              default: fprintf(stderr, "Invalid opacity level: %d\n", tileOpacity); break;
-            }
-          }
-        }
-        if (brightness < 255)
-        {
-          // These both return 0 on success and negative on error.
-          SDL_SetRenderDrawColor(display.renderer, 0, 0, 0, 255 - brightness);
-          SDL_Rect rect = {
-            tileRect.x - mapViewRect->x, tileRect.y - mapViewRect->y,
-            tileRect.w, tileRect.h };
-          SDL_RenderFillRect(display.renderer, &rect);
-        }
-      }
+      DrawTile(map, tile, mapViewRect, mapViewCenter, tileRect);
+      tile += map->nLayers;
     }
   }
   printLight = 0;
@@ -327,6 +341,7 @@ void DrawUi()
 
 void ComputeLayout()
 {
+  // TODO: Just call this once after resize.
   int border = BORDER_THICKNESS;
   int halfBorder = BORDER_THICKNESS / 2;
   int doubleBorder = 2 * BORDER_THICKNESS;
