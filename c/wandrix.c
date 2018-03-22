@@ -24,7 +24,7 @@ static int quitting = 0;
 TiledMap* tiledMap = 0;
 
 struct Player player = {
-  { .name = "Player", .img = { .path = "testimg/fork32.png" },
+  { .name = "Player", .img = { .path = "testimg/swordguy1.png" },
     .pos = {1000, 600},
     //.pos = {0,0},
   }
@@ -55,6 +55,7 @@ int Init()
   atexit(AtExitHandler);
   tiledMap = TiledMap_Load("map.wtm");
   if (!tiledMap) return 0;
+  InitTileCache(tiledMap);
   return 1;
 }
 
@@ -75,26 +76,8 @@ int LoadNpcs()
   return 1;
 }
 
-int LoadMap()
-{
-  struct TextFile* master = ReadTextFile(MAP_MASTER_FILENAME);
-  if (!master) return 0;
-  assert(master->nLines == 5);
-  //const char* tilesetFilename = master->lines[0];
-  int rows = ParseInt16(master->lines[1]);
-  int cols = ParseInt16(master->lines[2]);
-  if (rows == SDL_MIN_SINT16 || cols == SDL_MIN_SINT16) return 0;
-  struct IntGrid* tiles = ReadGridFile(master->lines[3], rows, cols);
-  if (!tiles) return 0;
-  struct IntGrid* cover = ReadGridFile(master->lines[4], rows, cols);
-  if (!cover) return 0;
-  FreeTextFile(master);
-  return 1;
-}
-
 int LoadAssets()
 {
-  if (!LoadMap()) return 0;
   if (!LoadImage(&player.c.img, 1))
   {
     fprintf(stderr, "Unable to load player image.\n");

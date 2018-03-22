@@ -20,13 +20,22 @@ static const int VIEW_DROPOFF_DISTANCE = 6;
 // of tiles that are so dim that there's probably no point in drawing them.
 // The other is to put a hard limit on visibility through semi-opaque terrain.)
 static const int VIEW_LIGHT_THRESHOLD = 0x20;
+// Distance across the entire view, in tiles. This is used to determine
+// the necessary size of the view on the screen.
+static const int VIEW_DIAMETER = 2 * VIEW_END_DISTANCE + 1;
+static int VIEW_CENTER = VIEW_DIAMETER / 2;
+static int MAX_LIGHT = 0xFF;
+
 // Determines whether game displays fullscreen. TODO: Make configurable.
-static const int FULLSCREEN = 1;
+static const int FULLSCREEN = 0;
 
 static struct Display {
   SDL_Window* window;
   SDL_Surface* screen;
   SDL_Renderer* renderer;
+  TiledTile** tileCache;
+  int* tileLighting;
+  Coords tileCacheMapPos;
 } display;
 
 static struct Layout {
@@ -60,11 +69,13 @@ void DestroyDisplay()
   SDL_DestroyWindow(display.window);
 }
 
-SDL_Texture* SurfaceToTexture(SDL_Surface* surface)
+SDL_Texture* SurfaceToTexture(SDL_Surface* surface, int freeSurfaceWhenDone)
 {
   SDL_Texture* texture = SDL_CreateTextureFromSurface(display.renderer, surface);
   if (!texture)
     fprintf(stderr, "Unable to create texture from surface. %s\n", SDL_GetError());
+  if (freeSurfaceWhenDone)
+    SDL_FreeSurface(surface);
   return texture;
 }
 
@@ -108,11 +119,10 @@ int InitDisplay(
     return 0;
   }
   SDL_Surface* quarterCircleSurface = CreateQuarterCircle(BORDER_THICKNESS, RGB_TO_RGBA(COLOR_FRAME));
-  quarterCircle = SDL_CreateTextureFromSurface(display.renderer, quarterCircleSurface);
-  SDL_FreeSurface(quarterCircleSurface);
+  quarterCircle = SurfaceToTexture(quarterCircleSurface, 1);
   if (!quarterCircle)
   {
-    fprintf(stderr, "Failed to convert circle surface to texture. %s\n", SDL_GetError());
+    fprintf(stderr, "Failed to convert circle surface to texture.\n");
     return 0;
   }
   return 1;
@@ -130,6 +140,14 @@ int InitImage()
   return 1;
 }
 
+void InitTileCache(TiledMap* map)
+{
+  assert(map);
+  int cacheSize = 2 * VIEW_END_DISTANCE + 1;
+  display.tileCache = MallocOrDie(cacheSize * map->nLayers * sizeof(TiledTile**));
+  display.tileLighting = MallocOrDie(cacheSize * sizeof(int));
+}
+
 int LoadImage(struct Image* img, int createTexture)
 {
   assert(img);
@@ -137,16 +155,16 @@ int LoadImage(struct Image* img, int createTexture)
   SDL_Surface* loadedSurface = IMG_Load(img->path);
   if (!loadedSurface)
   {
-    fprintf(stderr, "Unable to load image '%s': %s\n", img->path, IMG_GetError());
+    fprintf(stderr, "Failed to load image '%s'. %s\n", img->path, IMG_GetError());
     return 0;
   }
   img->sfc = loadedSurface;
   if (createTexture)
   {
-    img->tex = SDL_CreateTextureFromSurface(display.renderer, img->sfc);
+    img->tex = SurfaceToTexture(img->sfc, 0);
     if (!img->tex)
     {
-      fprintf(stderr, "Unable to create texture for image '%s': %s\n", img->path, SDL_GetError());
+      fprintf(stderr, "Failed to create texture for image '%s'.\n", img->path);
       return 0;
     }
   }
@@ -222,7 +240,9 @@ void DrawTile(TiledMap* map, TiledTile** tile, SDL_Rect* mapViewRect, Coords map
     else
     {
       int slope = 256 / (VIEW_END_DISTANCE - VIEW_DROPOFF_DISTANCE);
-      brightness = (255 + slope * VIEW_DROPOFF_DISTANCE) - (slope * distance / map->tileWidth);
+      brightness =
+        (255 + slope * VIEW_DROPOFF_DISTANCE)
+        - (slope * distance / map->tileWidth);
       if (brightness < VIEW_LIGHT_THRESHOLD)
         brightness = 0;
     }
@@ -250,10 +270,12 @@ void DrawTile(TiledMap* map, TiledTile** tile, SDL_Rect* mapViewRect, Coords map
     {
       // These both return 0 on success and negative on error.
       SDL_SetRenderDrawColor(display.renderer, 0, 0, 0, 255 - brightness);
-      SDL_Rect rect = {
+      SDL_Rect shadeRect = {
         tileRect.x - mapViewRect->x, tileRect.y - mapViewRect->y,
         tileRect.w, tileRect.h };
-      SDL_RenderFillRect(display.renderer, &rect);
+      SDL_Rect clipRect;
+      if (SDL_TRUE == SDL_IntersectRect(&layout.mapDisplayRect, &shadeRect, &clipRect))
+        SDL_RenderFillRect(display.renderer, &clipRect);
     }
   }
 }
@@ -279,8 +301,131 @@ static void ComputeVisibleCoords(int* resultFirstVisible, int* resultNVisible,
   *overextentAfter = (firstVisible + nVisible) * tileSize - intersectEdge + intersectSize;
 }
 
+void BuildTileCache(TiledMap* map, SDL_Rect* mapViewRect)
+{
+  Coords mapViewCenter = {
+    mapViewRect->x + mapViewRect->w / 2, mapViewRect->y + mapViewRect->h / 2 };
+  Coords centerTile = { mapViewCenter.x / map->tileWidth, mapViewCenter.y / map->tileHeight };
+  Coords cacheCenterPoint = {
+    centerTile.x * map->tileWidth + map->tileWidth / 2,
+    centerTile.y * map->tileHeight + map->tileHeight / 2 };
+  Coords tileShift = Coords_Sub(mapViewCenter, cacheCenterPoint);
+  int firstVisibleRow = centerTile.y - VIEW_END_DISTANCE;
+  int firstVisibleCol = centerTile.x - VIEW_END_DISTANCE;
+  display.tileCacheMapPos.x = firstVisibleCol * map->tileWidth;
+  display.tileCacheMapPos.y = firstVisibleRow * map->tileHeight;
+  int nVisibleRows = 2 * VIEW_END_DISTANCE + 1;
+  int nVisibleCols = nVisibleRows;
+  int nTilesInRow = map->nLayers * map->width;
+  int firstTileOffset = nTilesInRow * firstVisibleRow + map->nLayers * firstVisibleCol;
+  TiledTile** nextRowFirstTile = map->layerTiles + firstTileOffset;
+  TiledTile** tileCachePtr = display.tileCache;
+  for (int r=0;
+      r < 2 * VIEW_END_DISTANCE + 1;
+      ++r)
+  {
+    TiledTile** tile = nextRowFirstTile;
+    nextRowFirstTile += nTilesInRow;
+    int mapRow = firstVisibleRow + r;
+    for (int c=0;
+        c < 2 * VIEW_END_DISTANCE + 1;
+        ++c)
+    {
+      int mapCol = firstVisibleCol + nVisibleCols;
+      for (int layer=0;
+          layer < map->nLayers;
+          ++layer, ++tile, ++tileCachePtr)
+      {
+        if (mapRow < 0 || mapRow >= map->height
+            || mapCol < 0 || mapCol >= map->width)
+        {
+          *tileCachePtr = 0;
+        }
+        else
+        {
+          *tileCachePtr = *tile;
+        }
+      }
+    }
+  }
+  // The tile that the player is standing on is always fully lit.
+  display.tileCache[VIEW_DIAMETER * VIEW_CENTER + VIEW_CENTER] = MAX_LIGHT;
+  for (int radius=1; radius <= VIEW_END_DISTANCE; ++radius)
+  {
+    for (int t=0; t <= radius; ++t)
+    {
+      CalculateLight(centerTile.x + t, centerTile.y + radius, tileShift, map);
+      CalculateLight(centerTile.x + radius, centerTile.y + t, tileShift, map);
+      CalculateLight(centerTile.x - t, centerTile.y - radius, tileShift, map);
+      CalculateLight(centerTile.x - radius, centerTile.y - t, tileShift, map);
+    }
+  }
+}
+
+Sint32 SignExtend(Sint32 n)
+{
+  union {
+    Sint64 w; 
+    struct { Sint32 lo, hi; };
+  } z = { .w = n };
+  return z.hi;
+}
+
+int Abs(int n)
+{
+  return (n ^ SignExtend(n)) - SignExtend(n);
+}
+
+int SigNum(int n)
+{
+  return (0 < val) - (val < 0);
+}
+
+TiledTile** GetTile(TiledMap* map, int x, int y)
+{
+  int nTilesInRow = map->nLayers * map->width;
+  int tileOffset = (y * map->width + x) * map->nLayers;
+  TiledTile** tile = map->layerTiles + tileOffset;
+  return tile;
+}
+
+void CalculateLight(int tileX, int tileY, Coords tileShift, TiledMap* map)
+{
+  int dx = (VIEW_CENTER - tileX) * map->tileWidth + tileShift.x;
+  int dy = (VIEW_CENTER - tileY) * map->tileHeight + tileShift.y;
+  int dxSquare = dx * dx;
+  int dySquare = dy * dy;
+  int distance = (int)sqrt(dxSquare + dySquare);
+  int nextTileX, nextTileY;
+  if (dxSquare > dySquare)
+  {
+    nextTileX = tileX - SigNum(dx);
+    nextTileY = tileY;
+  }
+  else
+  {
+    nextTileX = tileX;
+    nextTileY = tileY - SigNum(dy);
+  }
+  int brightness = MAX_LIGHT;
+  TiledTile** tile = GetTile(map, nextTileX, nextTileY);
+  for (int layer=0; layer < map->nLayers; ++layer, ++tile)
+  {
+    TiledProperty tileOpacity = (*tile)->props[TILE_PROP_OPACITY];
+    brightness = ReduceBrightness(brightness, tileOpacity);
+  }
+  int slope = 256 / (VIEW_END_DISTANCE - VIEW_DROPOFF_DISTANCE);
+  brightness = (brightness + slope * VIEW_DROPOFF_DISTANCE)
+    - (slope * distance / map->tileWidth);
+  if (brightness < VIEW_LIGHT_THRESHOLD)
+    brightness = 0;
+  display.tileCache[VIEW_DIAMETER * tileX + tileY] = brightness;
+}
+
 void TiledMap_Draw(TiledMap* map, SDL_Rect* mapViewRect)
 {
+  // TODO: Rebuild tile cache only when necessary.
+  BuildTileCache(map, mapViewRect);
   // TODO: Draw some default tile for areas off the map edge.
   Coords mapViewCenter = {
     mapViewRect->x + mapViewRect->w / 2, mapViewRect->y + mapViewRect->h / 2 };
@@ -431,12 +576,15 @@ void Draw(int phase, TiledMap* map, struct Player* player, struct Npc* npcs, int
   //SDL_SetRenderDrawColor(display.renderer, 0xFF, 0xFF, 0xFF, 0xFF);
   ComputeLayout();
   DrawLayout();
-  SDL_Rect mapViewRect = {
-    player->c.pos.x - layout.mapDisplayRect.w / 2 + player->c.mov.x * phase / PHASE_GRAIN,
-    player->c.pos.y - layout.mapDisplayRect.h / 2 + player->c.mov.y * phase / PHASE_GRAIN,
-    layout.mapDisplayRect.w,
-    layout.mapDisplayRect.h
-  };
+  int tilesPerScreen = 2 * VIEW_END_DISTANCE + 1;
+  int mapViewWidth = 
+  SDL_Rect mapViewRect;
+  mapViewRect.w = map->tileWidth * tilesPerScreen;
+  mapViewRect.h = map->tileHeight * tilesPerScreen;
+  mapViewRect.x = player->c.pos.x - mapViewRect.w / 2
+    + player->c.mov.x * phase / PHASE_GRAIN;
+  mapViewRect.y = player->c.pos.y - mapViewRect.h / 2
+    + player->c.mov.y * phase / PHASE_GRAIN;
   TiledMap_Draw(map, &mapViewRect);
   DrawPlayer(&mapViewRect, phase, player);
   DrawNpcs(&mapViewRect, phase, npcs, npcCount);
