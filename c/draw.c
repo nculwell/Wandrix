@@ -201,6 +201,7 @@ int ReduceBrightness(int brightness, int tileOpacity)
     case 7: brightness = 0; break;
     default: fprintf(stderr, "Invalid opacity level: %d\n", tileOpacity); break;
   }
+  return brightness;
 }
 
 void DrawTile(TiledMap* map, TiledTile** tile, SDL_Rect* mapViewRect, Coords mapViewCenter, SDL_Rect tileRect)
@@ -258,6 +259,7 @@ void DrawTile(TiledMap* map, TiledTile** tile, SDL_Rect* mapViewRect, Coords map
 }
 
 static void ComputeVisibleCoords(int* resultFirstVisible, int* resultNVisible,
+    int *overextentBefore, int *overextentAfter,
     int nTiles, int tileSize, int intersectEdge, int intersectSize)
 {
   int firstVisible = intersectEdge / tileSize;
@@ -273,6 +275,8 @@ static void ComputeVisibleCoords(int* resultFirstVisible, int* resultNVisible,
     nVisible = maxVisible;
   *resultFirstVisible = firstVisible;
   *resultNVisible = nVisible;
+  *overextentBefore = intersectEdge - firstVisible * tileSize;
+  *overextentAfter = (firstVisible + nVisible) * tileSize - intersectEdge + intersectSize;
 }
 
 void TiledMap_Draw(TiledMap* map, SDL_Rect* mapViewRect)
@@ -286,10 +290,11 @@ void TiledMap_Draw(TiledMap* map, SDL_Rect* mapViewRect)
   SDL_Rect intersectRect;
   if (SDL_TRUE != SDL_IntersectRect(mapViewRect, &wholeMapRect, &intersectRect))
     return;
-  int firstVisibleRow, nVisibleRows, firstVisibleCol, nVisibleCols;
-  ComputeVisibleCoords(&firstVisibleRow, &nVisibleRows,
+  int firstVisibleRow, nVisibleRows, overextentTop, overextentBottom;
+  int firstVisibleCol, nVisibleCols, overextentLeft, overextentRight;
+  ComputeVisibleCoords(&firstVisibleRow, &nVisibleRows, &overextentTop, &overextentBottom,
       map->height, map->tileHeight, intersectRect.y, intersectRect.h);
-  ComputeVisibleCoords(&firstVisibleCol, &nVisibleCols,
+  ComputeVisibleCoords(&firstVisibleCol, &nVisibleCols, &overextentLeft, &overextentRight,
       map->width, map->tileWidth, intersectRect.x, intersectRect.w);
   SDL_Rect tileRect = { 0, 0,  map->tileWidth, map->tileHeight };
   int nTilesInRow = map->nLayers * map->width;
