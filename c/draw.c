@@ -185,25 +185,23 @@ int DrawTexture(SDL_Rect* mapViewRect, SDL_Texture* texture, SDL_Rect* textureRe
   return DrawTextureWithOffset(mapViewRect, texture, textureRect, 0, 0);
 }
 
-static void ComputeVisibleCoords(int* resultFirstVisible, int* resultNVisible,
-    int nTiles, int tileSize, int intersectEdge, int intersectSize)
-{
-  int firstVisible = intersectEdge / tileSize;
-  if (firstVisible * tileSize > intersectEdge)
-    --firstVisible;
-  int nVisible = intersectSize / tileSize;
-  int maxVisible = nTiles - firstVisible; // number of tiles before end of map
-  // might need to add one or two depending on how the intersection lines up
-  while ((firstVisible + nVisible) * tileSize < intersectEdge + intersectSize)
-    ++nVisible;
-  // check if we went off the edge of the map
-  if (nVisible > maxVisible)
-    nVisible = maxVisible;
-  *resultFirstVisible = firstVisible;
-  *resultNVisible = nVisible;
-}
-
 extern int printLight;
+
+int ReduceBrightness(int brightness, int tileOpacity)
+{
+  switch (tileOpacity)
+  {
+    case 0: break;
+    case 1: brightness -= brightness >> 3; break;
+    case 2: brightness -= brightness >> 2; break;
+    case 3: brightness >>= 2; break;
+    case 4: brightness >>= 3; break;
+    case 5: brightness >>= 4; break;
+    case 6: brightness >>= 5; break;
+    case 7: brightness = 0; break;
+    default: fprintf(stderr, "Invalid opacity level: %d\n", tileOpacity); break;
+  }
+}
 
 void DrawTile(TiledMap* map, TiledTile** tile, SDL_Rect* mapViewRect, Coords mapViewCenter, SDL_Rect tileRect)
 {
@@ -244,18 +242,7 @@ void DrawTile(TiledMap* map, TiledTile** tile, SDL_Rect* mapViewRect, Coords map
         DrawTextureWithOffset(mapViewRect,
             (*tile)->tex, &tileRect, (*tile)->x, (*tile)->y);
         TiledProperty tileOpacity = (*tile)->props[TILE_PROP_OPACITY];
-        switch (tileOpacity)
-        {
-          case 0: break;
-          case 1: brightness -= brightness >> 3; break;
-          case 2: brightness -= brightness >> 2; break;
-          case 3: brightness >>= 2; break;
-          case 4: brightness >>= 3; break;
-          case 5: brightness >>= 4; break;
-          case 6: brightness >>= 5; break;
-          case 7: brightness = 0; break;
-          default: fprintf(stderr, "Invalid opacity level: %d\n", tileOpacity); break;
-        }
+        brightness = ReduceBrightness(brightness, tileOpacity);
       }
     }
     if (brightness < 255)
@@ -268,6 +255,24 @@ void DrawTile(TiledMap* map, TiledTile** tile, SDL_Rect* mapViewRect, Coords map
       SDL_RenderFillRect(display.renderer, &rect);
     }
   }
+}
+
+static void ComputeVisibleCoords(int* resultFirstVisible, int* resultNVisible,
+    int nTiles, int tileSize, int intersectEdge, int intersectSize)
+{
+  int firstVisible = intersectEdge / tileSize;
+  if (firstVisible * tileSize > intersectEdge)
+    --firstVisible;
+  int nVisible = intersectSize / tileSize;
+  int maxVisible = nTiles - firstVisible; // number of tiles before end of map
+  // might need to add one or two depending on how the intersection lines up
+  while ((firstVisible + nVisible) * tileSize < intersectEdge + intersectSize)
+    ++nVisible;
+  // check if we went off the edge of the map
+  if (nVisible > maxVisible)
+    nVisible = maxVisible;
+  *resultFirstVisible = firstVisible;
+  *resultNVisible = nVisible;
 }
 
 void TiledMap_Draw(TiledMap* map, SDL_Rect* mapViewRect)
