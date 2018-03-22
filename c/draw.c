@@ -23,20 +23,26 @@ static const int VIEW_LIGHT_THRESHOLD = 0x20;
 // Determines whether game displays fullscreen. TODO: Make configurable.
 static const int FULLSCREEN = 1;
 
-struct Display {
+static struct Display {
   SDL_Window* window;
-  SDL_Renderer* renderer;
   SDL_Surface* screen;
-  struct Size maxTextureSize;
-};
+  SDL_Renderer* renderer;
+} display;
 
-static struct Display display;
+static struct Layout {
+  int isHorizontal;
+  SDL_Rect mapDisplayRect, uiDisplayRect;
+  SDL_Rect divider;
+  SDL_Rect borderTop, borderBottom, borderLeft, borderRight;
+  SDL_Rect cornerTopLeft, cornerTopRight, cornerBottomLeft, cornerBottomRight;
+} layout;
+
 static SDL_Texture* quarterCircle;
 
 #define RGB_TO_RGBA(COLOR) (((COLOR) << 8) | 0xFF)
 
 const Uint32 COLOR_FRAME = 0x5455FF;
-const Uint32 COLOR_UI_PANE = 0x402020;
+const Uint32 COLOR_UI_PANE = 0x202040;
 const Uint32 COLOR_BLACK = 0;
 
 void SetColor(Uint32 color)
@@ -66,6 +72,7 @@ int InitDisplay(
     fprintf(stderr, "Create window failed: %s\n", SDL_GetError());
     return 0;
   }
+  display.screen = SDL_GetWindowSurface(display.window);
   SDL_DisplayMode displayMode;
   if (0 != SDL_GetCurrentDisplayMode(SDL_GetWindowDisplayIndex(display.window), &displayMode))
   {
@@ -92,16 +99,6 @@ int InitDisplay(
     fprintf(stderr, "Create renderer failed: %s\n", SDL_GetError());
     return 0;
   }
-  SDL_RendererInfo rendererInfo;
-  if (0 > SDL_GetRendererInfo(display.renderer, &rendererInfo))
-  {
-    fprintf(stderr, "Get renderer info failed: %s\n", SDL_GetError());
-    return 0;
-  }
-  display.maxTextureSize.w = rendererInfo.max_texture_width;
-  display.maxTextureSize.h = rendererInfo.max_texture_height;
-  printf("Max texture size: %dx%d\n", display.maxTextureSize.w, display.maxTextureSize.h);
-  display.screen = SDL_GetWindowSurface(display.window);
   SDL_Surface* quarterCircleSurface = CreateQuarterCircle(BORDER_THICKNESS, RGB_TO_RGBA(COLOR_FRAME));
   quarterCircle = SDL_CreateTextureFromSurface(display.renderer, quarterCircleSurface);
   SDL_FreeSurface(quarterCircleSurface);
@@ -322,71 +319,83 @@ void DrawNpcs(SDL_Rect* mapViewRect, int phase, struct Npc* npcs, int npcCount)
       DrawChar(mapViewRect, &npcs[i].c, phase);
 }
 
-void DrawUi(SDL_Rect* uiViewRect)
+void DrawUi()
 {
   SetColor(COLOR_UI_PANE);
-  SDL_RenderFillRect(display.renderer, uiViewRect);
+  SDL_RenderFillRect(display.renderer, &layout.uiDisplayRect);
 }
 
-void DrawLayout(SDL_Rect* mapDisplayRect, SDL_Rect* uiDisplayRect)
+void ComputeLayout()
 {
-  // Calculate rectange sizes.
-  int isHorizontal = (display.screen->w >= display.screen->h);
-  int mapViewSize = isHorizontal ? display.screen->h : display.screen->w;
-  mapViewSize -= 2 * BORDER_THICKNESS;
-  SDL_Rect mapDisplayRectValue = {
-    BORDER_THICKNESS, BORDER_THICKNESS, mapViewSize, mapViewSize };
-  int uiDisplayShift = mapViewSize + 2 * BORDER_THICKNESS;
-  SDL_Rect uiDisplayRectValue = {
-    isHorizontal ? uiDisplayShift : BORDER_THICKNESS,
-    isHorizontal ? BORDER_THICKNESS : uiDisplayShift,
-    isHorizontal ? display.screen->w - uiDisplayShift - BORDER_THICKNESS : display.screen->w - 2 * BORDER_THICKNESS,
-    isHorizontal ? display.screen->h - 2 * BORDER_THICKNESS : display.screen->h - uiDisplayShift - 2 * BORDER_THICKNESS,
+  int border = BORDER_THICKNESS;
+  int halfBorder = BORDER_THICKNESS / 2;
+  int doubleBorder = 2 * BORDER_THICKNESS;
+  int screenW = display.screen->w;
+  int screenH = display.screen->h;
+  layout.isHorizontal = (screenW >= screenH);
+  int mapViewSize = (layout.isHorizontal ? screenH : screenW) - doubleBorder;
+  layout.mapDisplayRect.x = border;
+  layout.mapDisplayRect.y = border;
+  layout.mapDisplayRect.w = mapViewSize;
+  layout.mapDisplayRect.h = mapViewSize;
+  int uiDisplayShift = mapViewSize + doubleBorder;
+  if (layout.isHorizontal)
+  {
+    layout.uiDisplayRect.x = uiDisplayShift;
+    layout.uiDisplayRect.y = border;
+    layout.uiDisplayRect.w = screenW - uiDisplayShift - border;
+    layout.uiDisplayRect.h = screenH - doubleBorder;
+    layout.divider.x = border + mapViewSize;
+    layout.divider.y = border;
+    layout.divider.w = border;
+    layout.divider.h = screenH - doubleBorder;
+  }
+  else
+  {
+    layout.uiDisplayRect.x = border;
+    layout.uiDisplayRect.y = uiDisplayShift;
+    layout.uiDisplayRect.w = screenW - doubleBorder;
+    layout.uiDisplayRect.h = screenH - uiDisplayShift - border;
+    layout.divider.x = border;
+    layout.divider.y = border + mapViewSize;
+    layout.divider.w = screenW - doubleBorder;
+    layout.divider.h = border;
   };
-  SDL_Rect divider = {
-    isHorizontal ? BORDER_THICKNESS + mapViewSize           : BORDER_THICKNESS,
-    isHorizontal ? BORDER_THICKNESS                         : BORDER_THICKNESS + mapViewSize,
-    isHorizontal ? BORDER_THICKNESS                         : display.screen->w - 2 * BORDER_THICKNESS,
-    isHorizontal ? display.screen->h - 2 * BORDER_THICKNESS : BORDER_THICKNESS,
-  };
-  int HALF_BORDER_THICKNESS = BORDER_THICKNESS / 2;
-  SDL_Rect borderTop = {
-    HALF_BORDER_THICKNESS, 0,
-    display.screen->w - BORDER_THICKNESS, BORDER_THICKNESS
-  };
-  SDL_Rect borderBottom = {
-    HALF_BORDER_THICKNESS, display.screen->h - BORDER_THICKNESS,
-    display.screen->w - BORDER_THICKNESS, BORDER_THICKNESS
-  };
-  SDL_Rect borderLeft = {
-    0, HALF_BORDER_THICKNESS,
-    BORDER_THICKNESS, display.screen->h - BORDER_THICKNESS
-  };
-  SDL_Rect borderRight = {
-    display.screen->w - BORDER_THICKNESS, HALF_BORDER_THICKNESS,
-    BORDER_THICKNESS, display.screen->h - BORDER_THICKNESS
-  };
-  SDL_Rect cornerTopLeft = { 0, 0,
-    HALF_BORDER_THICKNESS, HALF_BORDER_THICKNESS };
-  SDL_Rect cornerTopRight = { display.screen->w - HALF_BORDER_THICKNESS, 0,
-    HALF_BORDER_THICKNESS, HALF_BORDER_THICKNESS };
-  SDL_Rect cornerBottomLeft = { 0, display.screen->h - HALF_BORDER_THICKNESS,
-    HALF_BORDER_THICKNESS, HALF_BORDER_THICKNESS };
-  SDL_Rect cornerBottomRight = { display.screen->w - HALF_BORDER_THICKNESS, display.screen->h - HALF_BORDER_THICKNESS,
-    HALF_BORDER_THICKNESS, HALF_BORDER_THICKNESS };
-  *mapDisplayRect = mapDisplayRectValue;
-  *uiDisplayRect = uiDisplayRectValue;
+  SDL_Rect borderTop = { halfBorder, 0, screenW - border, border };
+  SDL_Rect borderBottom = { halfBorder, screenH - border, screenW - border, border };
+  SDL_Rect borderLeft = { 0, halfBorder, border, screenH - border };
+  SDL_Rect borderRight = { screenW - border, halfBorder, border, screenH - border };
+  SDL_Rect cornerTopLeft = { 0, 0, halfBorder, halfBorder };
+  SDL_Rect cornerTopRight = { screenW - halfBorder, 0, halfBorder, halfBorder };
+  SDL_Rect cornerBottomLeft = { 0, screenH - halfBorder, halfBorder, halfBorder };
+  SDL_Rect cornerBottomRight = { screenW - halfBorder, screenH - halfBorder, halfBorder, halfBorder };
+  layout.borderTop = borderTop;
+  layout.borderBottom = borderBottom;
+  layout.borderLeft = borderLeft;
+  layout.borderRight = borderRight;
+  layout.cornerTopLeft = cornerTopLeft;
+  layout.cornerTopRight = cornerTopRight;
+  layout.cornerBottomLeft = cornerBottomLeft;
+  layout.cornerBottomRight = cornerBottomRight;
+}
+
+void DrawLayout()
+{
   // Draw frame.
   SetColor(COLOR_FRAME);
-  SDL_RenderFillRect(display.renderer, &borderTop);
-  SDL_RenderFillRect(display.renderer, &borderBottom);
-  SDL_RenderFillRect(display.renderer, &borderLeft);
-  SDL_RenderFillRect(display.renderer, &borderRight);
-  SDL_RenderFillRect(display.renderer, &divider);
-  SDL_RenderCopyEx(display.renderer, quarterCircle, 0, &cornerTopLeft, 0, 0, SDL_FLIP_HORIZONTAL | SDL_FLIP_VERTICAL);
-  SDL_RenderCopyEx(display.renderer, quarterCircle, 0, &cornerTopRight, 0, 0, SDL_FLIP_VERTICAL);
-  SDL_RenderCopyEx(display.renderer, quarterCircle, 0, &cornerBottomLeft, 0, 0, SDL_FLIP_HORIZONTAL);
-  SDL_RenderCopyEx(display.renderer, quarterCircle, 0, &cornerBottomRight, 0, 0, SDL_FLIP_NONE);
+  SDL_RenderFillRect(display.renderer, &layout.borderTop);
+  SDL_RenderFillRect(display.renderer, &layout.borderBottom);
+  SDL_RenderFillRect(display.renderer, &layout.borderLeft);
+  SDL_RenderFillRect(display.renderer, &layout.borderRight);
+  SDL_RenderFillRect(display.renderer, &layout.divider);
+  SDL_RenderCopyEx(display.renderer, quarterCircle, 0, &layout.cornerTopLeft,
+      0, 0, SDL_FLIP_HORIZONTAL | SDL_FLIP_VERTICAL);
+  SDL_RenderCopyEx(display.renderer, quarterCircle, 0, &layout.cornerTopRight,
+      0, 0, SDL_FLIP_VERTICAL);
+  SDL_RenderCopyEx(display.renderer, quarterCircle, 0, &layout.cornerBottomLeft,
+      0, 0, SDL_FLIP_HORIZONTAL);
+  SDL_RenderCopyEx(display.renderer, quarterCircle, 0, &layout.cornerBottomRight,
+      0, 0, SDL_FLIP_NONE);
 }
 
 void Draw(int phase, TiledMap* map, struct Player* player, struct Npc* npcs, int npcCount)
@@ -395,17 +404,18 @@ void Draw(int phase, TiledMap* map, struct Player* player, struct Npc* npcs, int
   SDL_RenderClear(display.renderer);
   SDL_SetRenderDrawBlendMode(display.renderer, SDL_BLENDMODE_BLEND);
   //SDL_SetRenderDrawColor(display.renderer, 0xFF, 0xFF, 0xFF, 0xFF);
-  SDL_Rect mapDisplayRect, uiDisplayRect;
-  DrawLayout(&mapDisplayRect, &uiDisplayRect);
+  ComputeLayout();
+  DrawLayout();
   SDL_Rect mapViewRect = {
-    player->c.pos.x - mapDisplayRect.w / 2 + player->c.mov.x * phase / PHASE_GRAIN,
-    player->c.pos.y - mapDisplayRect.h / 2 + player->c.mov.y * phase / PHASE_GRAIN,
-    mapDisplayRect.w, mapDisplayRect.h
+    player->c.pos.x - layout.mapDisplayRect.w / 2 + player->c.mov.x * phase / PHASE_GRAIN,
+    player->c.pos.y - layout.mapDisplayRect.h / 2 + player->c.mov.y * phase / PHASE_GRAIN,
+    layout.mapDisplayRect.w,
+    layout.mapDisplayRect.h
   };
   TiledMap_Draw(map, &mapViewRect);
   DrawPlayer(&mapViewRect, phase, player);
   DrawNpcs(&mapViewRect, phase, npcs, npcCount);
-  DrawUi(&uiDisplayRect);
+  DrawUi();
   SDL_RenderPresent(display.renderer);
 }
 
