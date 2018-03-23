@@ -55,7 +55,7 @@ int Init()
   atexit(AtExitHandler);
   tiledMap = TiledMap_Load("map.wtm");
   if (!tiledMap) return 0;
-  InitTileCache(tiledMap);
+  if (!InitTileCache(tiledMap)) return 0;
   return 1;
 }
 

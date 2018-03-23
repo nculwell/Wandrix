@@ -18,6 +18,12 @@ struct Coords Coords_Add(struct Coords a, struct Coords b)
   return sum;
 }
 
+struct Coords Coords_Sub(struct Coords a, struct Coords b)
+{
+  struct Coords sum = { a.x - b.x, a.y - b.y };
+  return sum;
+}
+
 int Coords_SimpleApproxDist(struct Coords point1, struct Coords point2)
 {
   int xDist = point1.x - point2.x;
@@ -286,5 +292,24 @@ static int IntSqrt(int n)
     bit >>= 2;
   }
   return result;
+}
+
+Sint32 SignExtend(Sint32 n)
+{
+  union {
+    Sint64 w; 
+    struct { Sint32 lo, hi; };
+  } z = { .w = n };
+  return z.hi;
+}
+
+int Abs(int n)
+{
+  return (n ^ SignExtend(n)) - SignExtend(n);
+}
+
+int SigNum(int n)
+{
+  return (0 < n) - (n < 0);
 }
 

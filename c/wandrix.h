@@ -7,7 +7,7 @@
 #include <assert.h>
 #include <limits.h>
 
-#define PHASE_GRAIN 10000
+#define PHASE_GRAIN 4096
 
 typedef struct Coords { int x, y; } Coords;
 struct Size { int w, h; };
@@ -71,6 +71,7 @@ typedef int (*Coords_DistanceFunction)(
 
 struct Coords Coords_Scale(int scalar, struct Coords s);
 struct Coords Coords_Add(struct Coords a, struct Coords b);
+struct Coords Coords_Sub(struct Coords a, struct Coords b);
 int Coords_SimpleApproxDist(struct Coords point1, struct Coords point2);
 int Coords_ApproxDist(struct Coords point1, struct Coords point2);
 int Coords_ExactDist(struct Coords point1, struct Coords point2);
@@ -90,6 +91,10 @@ void FreeIntGrid(struct IntGrid* grid);
 Sint32 ParseInt32(const char* str);
 Sint16 ParseInt16(const char* str);
 
+Sint32 SignExtend(Sint32 n);
+int Abs(int n);
+int SigNum(int n);
+
 int LoadImage(struct Image* img, int createTexture);
 int InitImage();
 
@@ -98,6 +103,7 @@ TiledMap* TiledMap_Load(const char* filename);
 int InitDisplay(
     const char* windowName, int screenW, int screenH,
     int minFrameRateCap, int* frameRateCap);
+int InitTileCache(TiledMap* map);
 void DestroyDisplay();
 void Draw(
     int phase, TiledMap* map,
